@@ -1,0 +1,20 @@
+CREATE TABLE worlds (
+  id INTEGER PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  preclaim_end INTEGER NOT NULL,
+  creator INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE slots (
+  id INTEGER PRIMARY KEY,
+  world INTEGER REFERENCES worlds(id),
+  name TEXT NOT NULL,
+  games TEXT NOT NULL,
+  notes TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE preclaims (
+  slot INTEGER REFERENCES slots(id),
+  user_snowflake INTEGER NOT NULL,
+  old INTEGER NOT NULL DEFAULT 0
+) STRICT;
