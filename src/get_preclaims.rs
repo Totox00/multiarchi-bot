@@ -62,7 +62,13 @@ impl GetPreclaimsCommand {
 
         let selected_preclaims: Vec<_> = {
             let mut rng = thread_rng();
-            preclaims.into_iter().filter_map(|(slot, users)| users.choose(&mut rng).copied().map(|user| (slot, user))).collect()
+            preclaims
+                .into_iter()
+                .map(|(slot, mut users)| {
+                    users.shuffle(&mut rng);
+                    (slot, users)
+                })
+                .collect()
         };
 
         if selected_preclaims.is_empty() {
@@ -76,11 +82,23 @@ impl GetPreclaimsCommand {
                         join_all(
                             selected_preclaims
                                 .into_iter()
-                                .map(async |(slot, user)| (user, query!("SELECT name FROM slots WHERE id = ? LIMIT 1", slot).fetch_one(&bot.db).await)),
+                                .map(async |(slot, users)| (users, query!("SELECT name FROM slots WHERE id = ? LIMIT 1", slot).fetch_one(&bot.db).await)),
                         )
                         .await
                         .into_iter()
-                        .filter_map(|(user, response)| if let Ok(record) = response { Some(format!("<@{user}> {} is yours", record.name)) } else { None })
+                        .filter_map(|(users, response)| if let (Some(first_user), Ok(record)) = (users.first(), response) {
+                            Some(format!(
+                                "<@{first_user}> {} is yours{}",
+                                record.name,
+                                if users.len() > 1 {
+                                    format!(" ({})", users[1..].iter().map(|user| user.to_string()).collect::<Vec<_>>().join(", "))
+                                } else {
+                                    String::new()
+                                }
+                            ))
+                        } else {
+                            None
+                        })
                         .collect::<Vec<_>>()
                         .join("\n")
                     ),
