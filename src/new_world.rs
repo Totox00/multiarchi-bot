@@ -93,8 +93,8 @@ impl NewWorldCommand {
             .await
         {
             let slot_len = slots.len();
-            for (name, games, notes) in slots {
-                if query!("INSERT INTO slots (world, name, games, notes) VALUES (?, ?, ?, ?)", response.id, name, games, notes)
+            for (name, games, notes, points) in slots {
+                if query!("INSERT INTO slots (world, name, games, notes, points) VALUES (?, ?, ?, ?, ?)", response.id, name, games, notes, points)
                     .execute(&bot.db)
                     .await
                     .is_err()
@@ -117,11 +117,11 @@ async fn fetch_slot_file(url: &str) -> Result<String, reqwest::Error> {
     reqwest::get(url).await?.text().await
 }
 
-fn parse_slot_file(content: &str) -> Option<Vec<(String, String, String)>> {
+fn parse_slot_file(content: &str) -> Option<Vec<(String, String, String, String)>> {
     let mut out = vec![];
 
-    for [name, games, notes] in content.lines().array_chunks() {
-        out.push((name.to_owned(), games.to_owned(), notes.to_owned()));
+    for [name, games, notes, points] in content.lines().array_chunks() {
+        out.push((name.to_owned(), games.to_owned(), notes.to_owned(), points.to_owned()));
     }
 
     Some(out)

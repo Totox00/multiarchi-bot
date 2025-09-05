@@ -22,6 +22,7 @@ struct Slot {
     name: String,
     games: String,
     notes: String,
+    points: String,
 }
 
 pub struct ViewPreclaimsCommand {}
@@ -162,7 +163,7 @@ async fn get_slot_details(bot: &Bot, slots: &[i64]) -> Vec<Slot> {
     join_all(
         slots
             .iter()
-            .map(async |id| (id, query!("SELECT name, games, notes FROM slots WHERE id = ? LIMIT 1", id).fetch_one(&bot.db).await)),
+            .map(async |id| (id, query!("SELECT name, games, notes, points FROM slots WHERE id = ? LIMIT 1", id).fetch_one(&bot.db).await)),
     )
     .await
     .into_iter()
@@ -173,6 +174,7 @@ async fn get_slot_details(bot: &Bot, slots: &[i64]) -> Vec<Slot> {
                 name: record.name,
                 games: record.games,
                 notes: record.notes,
+                points: record.points,
             })
         } else {
             None
@@ -244,11 +246,17 @@ fn build_embed(world: &World, slots: Vec<Slot>, page: usize, page_count: usize) 
                 .footer(CreateEmbedFooter::new("Preclaim end:"))
                 .timestamp(Timestamp::from_unix_timestamp(world.preclaim_end).unwrap_or_default())
                 .colour(Colour::DARK_PURPLE)
-                .fields(
-                    slots
-                        .iter()
-                        .map(|Slot { id: _, name, games, notes }| (format!("`{name}`"), if notes.is_empty() { games.to_owned() } else { format!("{games}\n*{notes}*") }, false)),
-                ),
+                .fields(slots.iter().map(|Slot { id: _, name, games, notes, points }| {
+                    (
+                        format!("`{name}`"),
+                        if notes.is_empty() {
+                            format!("{games}\nPoints: {points}")
+                        } else {
+                            format!("{games}\n*{notes}*\nPoints: {points}")
+                        },
+                        false,
+                    )
+                })),
         )
         .ephemeral(true)
         .components(components)

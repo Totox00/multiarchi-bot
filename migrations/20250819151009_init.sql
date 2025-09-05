@@ -10,7 +10,8 @@ CREATE TABLE slots (
   world INTEGER REFERENCES worlds(id),
   name TEXT NOT NULL,
   games TEXT NOT NULL,
-  notes TEXT NOT NULL
+  notes TEXT NOT NULL,
+  points TEXT NOT NULL
 ) STRICT;
 
 CREATE TABLE preclaims (
