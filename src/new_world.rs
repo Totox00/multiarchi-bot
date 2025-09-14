@@ -6,21 +6,21 @@ use serenity::all::{
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot};
+use crate::{util::SimpleReply, Bot, Command};
 
 pub struct NewWorldCommand {}
 
-impl NewWorldCommand {
-    pub fn register() -> CreateCommand {
+impl Command for NewWorldCommand {
+    fn register() -> CreateCommand {
         CreateCommand::new("new-world")
             .description("Creates a new world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the new world"))
-            .add_option(CreateCommandOption::new(CommandOptionType::Number, "preclaim-end", "Time preclaims close, as UNIX timestamp"))
-            .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls"))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the new world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::Number, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls").required(true))
     }
 
-    pub async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
+    async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let user = command.user.id;
 
         if !bot.admins.contains(&user) {

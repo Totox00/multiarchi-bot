@@ -9,7 +9,7 @@ use serenity::{
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot};
+use crate::{util::SimpleReply, Bot, Command};
 
 struct World {
     name: String,
@@ -27,12 +27,12 @@ struct Slot {
 
 pub struct ViewPreclaimsCommand {}
 
-impl ViewPreclaimsCommand {
-    pub fn register() -> CreateCommand {
+impl Command for ViewPreclaimsCommand {
+    fn register() -> CreateCommand {
         CreateCommand::new("view-preclaims").description("View worlds with possible preclaims").kind(CommandType::ChatInput)
     }
 
-    pub async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
+    async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let worlds = if let Some(worlds) = get_worlds(bot).await {
             worlds
         } else {
@@ -61,7 +61,9 @@ impl ViewPreclaimsCommand {
             )
             .await;
     }
+}
 
+impl ViewPreclaimsCommand {
     pub async fn handle_interraction(bot: &Bot, ctx: Context, interaction: &ComponentInteraction, id: &str) {
         if id == "select" {
             let user_id = i64::from(interaction.user.id);
@@ -83,13 +85,28 @@ impl ViewPreclaimsCommand {
                 return;
             };
 
-            if query!("DELETE FROM preclaims WHERE user_snowflake = ? AND old = 0", user_id).execute(&bot.db).await.is_err() {
-                interaction.simple_reply(&ctx, "Failed to remove old preclaims").await;
-                return;
-            }
+            if let Some(player) = bot.get_player(user_id).await {
+                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ?", player.id).fetch_optional(&bot.db).await {
+                    if response.is_some_and(|record| record.claims > 0) {
+                        interaction.simple_reply(&ctx, "Cannot preclaim with current claims").await;
+                        return;
+                    }
+                } else {
+                    interaction.simple_reply(&ctx, "Failed to get current claims").await;
+                    return;
+                }
 
-            if query!("INSERT INTO preclaims (slot, user_snowflake) VALUES (?, ?)", slot_id, user_id).execute(&bot.db).await.is_err() {
-                interaction.simple_reply(&ctx, "Failed to create preclaim").await;
+                if query!("DELETE FROM preclaims WHERE player = ? AND status = 0", player.id).execute(&bot.db).await.is_err() {
+                    interaction.simple_reply(&ctx, "Failed to remove old preclaims").await;
+                    return;
+                }
+
+                if query!("INSERT INTO preclaims (slot, player) VALUES (?, ?)", slot_id, player.id).execute(&bot.db).await.is_err() {
+                    interaction.simple_reply(&ctx, "Failed to create preclaim").await;
+                    return;
+                }
+            } else {
+                interaction.simple_reply(&ctx, "Failed to get user").await;
                 return;
             }
 

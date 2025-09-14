@@ -1,8 +1,15 @@
 #![feature(iter_next_chunk)]
 #![feature(iter_array_chunks)]
 
+mod claim;
 mod get_preclaims;
+mod mark_free;
 mod new_world;
+mod report;
+mod scrape;
+mod status;
+mod track_world;
+mod unclaim;
 mod util;
 mod view_preclaims;
 
@@ -11,34 +18,69 @@ use std::env;
 use dotenvy::from_filename_override;
 use new_world::NewWorldCommand;
 use serenity::{
-    all::{Command, Context, EventHandler, GatewayIntents, Interaction, Ready, UserId},
+    all::{Command as SerenityCommand, CommandInteraction, Context, CreateCommand, EventHandler, GatewayIntents, Interaction, Ready, UserId},
     async_trait, Client,
 };
 use sqlx::{
+    query,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
 use view_preclaims::ViewPreclaimsCommand;
 
-use crate::get_preclaims::GetPreclaimsCommand;
+use crate::{
+    claim::ClaimCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, report::ReportCommand, status::StatusCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
+};
+
+const DEFAULT_CLAIMS: i64 = 1;
 
 struct Bot {
     db: SqlitePool,
     admins: Vec<UserId>,
 }
 
+trait Command {
+    fn register() -> CreateCommand;
+    async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction);
+}
+
+struct Player {
+    pub id: i64,
+    pub claims: i64,
+}
+
+impl Bot {
+    async fn get_player(&self, snowflake: i64) -> Option<Player> {
+        if let Ok(response) = query!("SELECT id, claims FROM players WHERE snowflake = ? LIMIT 1", snowflake).fetch_one(&self.db).await {
+            Some(Player {
+                id: response.id,
+                claims: response.claims,
+            })
+        } else {
+            let response = query!("INSERT INTO players (snowflake, claims) VALUES (?, ?) RETURNING id", snowflake, DEFAULT_CLAIMS)
+                .fetch_one(&self.db)
+                .await
+                .ok()?;
+            Some(Player {
+                id: response.id,
+                claims: DEFAULT_CLAIMS,
+            })
+        }
+    }
+}
+
 #[async_trait]
 impl EventHandler for Bot {
     async fn ready(&self, ctx: Context, _ready: Ready) {
-        if let Err(err) = Command::create_global_command(&ctx.http, ViewPreclaimsCommand::register()).await {
-            println!("Failed to create view-preclaims command: {err}");
-        }
-        if let Err(err) = Command::create_global_command(&ctx.http, NewWorldCommand::register()).await {
-            println!("Failed to create new-world command: {err}");
-        }
-        if let Err(err) = Command::create_global_command(&ctx.http, GetPreclaimsCommand::register()).await {
-            println!("Failed to create get-preclaims command: {err}");
-        }
+        register::<ViewPreclaimsCommand>("view-preclaims", &ctx).await;
+        register::<NewWorldCommand>("new-world", &ctx).await;
+        register::<GetPreclaimsCommand>("get-preclaims", &ctx).await;
+        register::<TrackWorldCommand>("track-world", &ctx).await;
+        register::<ClaimCommand>("claim", &ctx).await;
+        register::<StatusCommand>("status", &ctx).await;
+        register::<ReportCommand>("report", &ctx).await;
+        register::<UnclaimCommand>("unclaim", &ctx).await;
+        register::<MarkFreeCommand>("mark-free", &ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -47,6 +89,12 @@ impl EventHandler for Bot {
                 "view-preclaims" => ViewPreclaimsCommand::execute(self, ctx, command).await,
                 "new-world" => NewWorldCommand::execute(self, ctx, command).await,
                 "get-preclaims" => GetPreclaimsCommand::execute(self, ctx, command).await,
+                "track-world" => TrackWorldCommand::execute(self, ctx, command).await,
+                "claim" => ClaimCommand::execute(self, ctx, command).await,
+                "status" => StatusCommand::execute(self, ctx, command).await,
+                "report" => ReportCommand::execute(self, ctx, command).await,
+                "unclaim" => UnclaimCommand::execute(self, ctx, command).await,
+                "mark-free" => MarkFreeCommand::execute(self, ctx, command).await,
                 _ => (),
             },
             Interaction::Component(component) => {
@@ -83,5 +131,11 @@ async fn main() {
 
     if let Err(err) = client.start().await {
         println!("Client error: {err:?}");
+    }
+}
+
+async fn register<T: Command>(name: &str, ctx: &Context) {
+    if let Err(err) = SerenityCommand::create_global_command(&ctx.http, T::register()).await {
+        println!("Failed to create {name} command: {err}");
     }
 }

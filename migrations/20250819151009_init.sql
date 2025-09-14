@@ -2,12 +2,13 @@ CREATE TABLE worlds (
   id INTEGER PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
   preclaim_end INTEGER NOT NULL,
+  resolved_preclaims INTEGER NOT NULL DEFAULT 0,
   creator INTEGER NOT NULL
 ) STRICT;
 
 CREATE TABLE slots (
   id INTEGER PRIMARY KEY,
-  world INTEGER REFERENCES worlds(id),
+  world INTEGER NOT NULL REFERENCES worlds(id),
   name TEXT NOT NULL,
   games TEXT NOT NULL,
   notes TEXT NOT NULL,

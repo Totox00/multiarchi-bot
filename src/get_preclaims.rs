@@ -7,19 +7,19 @@ use serenity::{
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot};
+use crate::{util::SimpleReply, Bot, Command};
 
 pub struct GetPreclaimsCommand {}
 
-impl GetPreclaimsCommand {
-    pub fn register() -> CreateCommand {
+impl Command for GetPreclaimsCommand {
+    fn register() -> CreateCommand {
         CreateCommand::new("get-preclaims")
             .description("Gets preclaims for a world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the world"))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the world").required(true))
     }
 
-    pub async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
+    async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let user = command.user.id;
 
         if !bot.admins.contains(&user) {
@@ -40,35 +40,11 @@ impl GetPreclaimsCommand {
             return;
         }
 
-        let preclaims = if let Ok(response) = query!(
-            "UPDATE preclaims SET old = 1 WHERE slot IN (SELECT id FROM slots WHERE world IN (SELECT id FROM worlds WHERE name = ?)) RETURNING slot, user_snowflake",
-            name
-        )
-        .fetch_all(&bot.db)
-        .await
-        {
-            let mut preclaims: HashMap<i64, Vec<i64>> = HashMap::new();
-
-            for record in response {
-                if let Some(slot) = record.slot {
-                    preclaims.entry(slot).and_modify(|vec| vec.push(record.user_snowflake)).or_insert(vec![record.user_snowflake]);
-                }
-            }
-            preclaims
+        let selected_preclaims = if let Some(selected_preclaims) = resolve_preclaims(bot, name).await {
+            selected_preclaims
         } else {
-            command.simple_reply(&ctx, "Failed to get preclaims").await;
+            command.simple_reply(&ctx, "Failed to resolve preclaims").await;
             return;
-        };
-
-        let selected_preclaims: Vec<_> = {
-            let mut rng = thread_rng();
-            preclaims
-                .into_iter()
-                .map(|(slot, mut users)| {
-                    users.shuffle(&mut rng);
-                    (slot, users)
-                })
-                .collect()
         };
 
         if selected_preclaims.is_empty() {
@@ -79,23 +55,14 @@ impl GetPreclaimsCommand {
                     &ctx,
                     format!(
                         "```\n{}\n```",
-                        join_all(
-                            selected_preclaims
-                                .into_iter()
-                                .map(async |(slot, users)| (users, query!("SELECT name FROM slots WHERE id = ? LIMIT 1", slot).fetch_one(&bot.db).await)),
-                        )
+                        join_all(selected_preclaims.into_iter().map(async |(slot, player)| (
+                            query!("SELECT name FROM slots WHERE id = ? LIMIT 1", slot).fetch_one(&bot.db).await,
+                            query!("SELECT snowflake FROM players WHERE id = ? LIMIT 1", player).fetch_one(&bot.db).await
+                        )),)
                         .await
                         .into_iter()
-                        .filter_map(|(users, response)| if let (Some(first_user), Ok(record)) = (users.first(), response) {
-                            Some(format!(
-                                "<@{first_user}> {} is yours{}",
-                                record.name,
-                                if users.len() > 1 {
-                                    format!(" ({})", users[1..].iter().map(|user| user.to_string()).collect::<Vec<_>>().join(", "))
-                                } else {
-                                    String::new()
-                                }
-                            ))
+                        .filter_map(|(slot_response, player_response)| if let (Ok(slot_record), Ok(player_record)) = (slot_response, player_response) {
+                            Some(format!("<@{}> {} is yours", player_record.snowflake, slot_record.name))
                         } else {
                             None
                         })
@@ -105,5 +72,62 @@ impl GetPreclaimsCommand {
                 )
                 .await;
         }
+    }
+}
+
+pub async fn resolve_preclaims(bot: &Bot, name: &str) -> Option<Vec<(i64, i64)>> {
+    if query!("SELECT resolved_preclaims FROM worlds WHERE name = ? LIMIT 1", name)
+        .fetch_one(&bot.db)
+        .await
+        .ok()?
+        .resolved_preclaims
+        > 0
+    {
+        Some(
+            query!(
+                "SELECT slot, player FROM preclaims WHERE status = 2 AND slot IN (SELECT id FROM slots WHERE world IN (SELECT id FROM worlds WHERE name = ?))",
+                name
+            )
+            .fetch_all(&bot.db)
+            .await
+            .ok()?
+            .into_iter()
+            .map(|record| (record.slot, record.player))
+            .collect(),
+        )
+    } else {
+        let mut preclaims: HashMap<i64, Vec<i64>> = HashMap::new();
+
+        for record in query!(
+            "UPDATE preclaims SET status = 1 WHERE slot IN (SELECT id FROM slots WHERE world IN (SELECT id FROM worlds WHERE name = ?)) RETURNING slot, player",
+            name
+        )
+        .fetch_all(&bot.db)
+        .await
+        .ok()?
+        {
+            preclaims.entry(record.slot).and_modify(|vec| vec.push(record.player)).or_insert(vec![record.player]);
+        }
+
+        let selected_preclaims: Vec<_> = {
+            let mut rng = thread_rng();
+            preclaims
+                .iter()
+                .map(|(slot, players)| (slot, players.choose(&mut rng)))
+                .filter_map(|(slot, player)| player.map(|player| (*slot, *player)))
+                .collect()
+        };
+
+        for (slot, player) in &selected_preclaims {
+            if query!("UPDATE preclaims SET status = 2 WHERE slot = ? AND player = ?", slot, player).execute(&bot.db).await.is_err() {
+                println!("Failed to set preclaim status for player {player} for slot {slot}");
+            }
+        }
+
+        if query!("UPDATE worlds SET resolved_preclaims = 1 WHERE name = ?", name).execute(&bot.db).await.is_err() {
+            println!("Failed to mark preclaims as resolved for world {name}");
+        }
+
+        Some(selected_preclaims)
     }
 }
