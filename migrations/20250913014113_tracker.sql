@@ -25,14 +25,14 @@ CREATE TABLE tracked_slots (
   status INTEGER NOT NULL,
   checks INTEGER NOT NULL,
   checks_total INTEGER NOT NULL,
-  last_activity INTEGER
+  last_activity INTEGER,
   free INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
 CREATE TABLE claims (
   id INTEGER PRIMARY KEY,
   slot INTEGER NOT NULL REFERENCES tracked_slots(id),
-  player INTEGER NOT NULL REFERENCES players(id),
+  player INTEGER NOT NULL REFERENCES players(id)
 ) STRICT;
 
 CREATE TABLE updates (
