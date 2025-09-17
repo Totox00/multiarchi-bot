@@ -5,6 +5,7 @@ mod claim;
 mod get_preclaims;
 mod mark_free;
 mod new_world;
+mod public;
 mod report;
 mod scrape;
 mod status;
@@ -29,7 +30,8 @@ use sqlx::{
 use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
-    claim::ClaimCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, report::ReportCommand, status::StatusCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
+    claim::ClaimCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand, status::StatusCommand, track_world::TrackWorldCommand,
+    unclaim::UnclaimCommand,
 };
 
 const DEFAULT_CLAIMS: i64 = 1;
@@ -81,6 +83,7 @@ impl EventHandler for Bot {
         register::<ReportCommand>("report", &ctx).await;
         register::<UnclaimCommand>("unclaim", &ctx).await;
         register::<MarkFreeCommand>("mark-free", &ctx).await;
+        register::<PublicCommand>("public", &ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -95,6 +98,7 @@ impl EventHandler for Bot {
                 "report" => ReportCommand::execute(self, ctx, command).await,
                 "unclaim" => UnclaimCommand::execute(self, ctx, command).await,
                 "mark-free" => MarkFreeCommand::execute(self, ctx, command).await,
+                "public" => PublicCommand::execute(self, ctx, command).await,
                 _ => (),
             },
             Interaction::Component(component) => {
@@ -122,6 +126,7 @@ async fn main() {
     let admins = vec![
         UserId::new(458684324653301770), // totox00
         UserId::new(622847469495123990), // dragorrod
+                                         // UserId::new(764623297932820501), // elirefeltores (tester)
     ];
 
     let bot = Bot { db, admins };

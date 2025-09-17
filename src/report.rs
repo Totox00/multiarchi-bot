@@ -112,6 +112,11 @@ impl Command for ReportCommand {
         .fetch_all(&bot.db)
         .await
         {
+            if slot_response.is_empty() {
+                let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("World does not exist")).await;
+                return;
+            }
+
             let mut all_checks = 0;
             let mut all_checks_total = 0;
             let mut slot_reports = vec![];
