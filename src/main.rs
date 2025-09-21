@@ -11,6 +11,7 @@ mod scrape;
 mod status;
 mod track_world;
 mod unclaim;
+mod unclaimed;
 mod util;
 mod view_preclaims;
 
@@ -31,7 +32,7 @@ use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
     claim::ClaimCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand, status::StatusCommand, track_world::TrackWorldCommand,
-    unclaim::UnclaimCommand,
+    unclaim::UnclaimCommand, unclaimed::UnclaimedCommand,
 };
 
 const DEFAULT_CLAIMS: i64 = 1;
@@ -84,6 +85,7 @@ impl EventHandler for Bot {
         register::<UnclaimCommand>("unclaim", &ctx).await;
         register::<MarkFreeCommand>("mark-free", &ctx).await;
         register::<PublicCommand>("public", &ctx).await;
+        register::<UnclaimedCommand>("unclaimed", &ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -99,6 +101,7 @@ impl EventHandler for Bot {
                 "unclaim" => UnclaimCommand::execute(self, ctx, command).await,
                 "mark-free" => MarkFreeCommand::execute(self, ctx, command).await,
                 "public" => PublicCommand::execute(self, ctx, command).await,
+                "unclaimed" => UnclaimedCommand::execute(self, ctx, command).await,
                 _ => (),
             },
             Interaction::Component(component) => {
