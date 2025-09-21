@@ -17,13 +17,6 @@ impl Command for ReportCommand {
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
-        let user = command.user.id;
-
-        if !bot.admins.contains(&user) {
-            command.simple_reply(&ctx, "You do not have permission to use this command").await;
-            return;
-        }
-
         let mut world = "";
         let mut slot = None;
 
@@ -42,7 +35,9 @@ impl Command for ReportCommand {
 
         let _ = command.defer_ephemeral(&ctx.http).await;
 
-        bot.update_scrape(world).await;
+        if bot.admins.contains(&command.user.id) {
+            bot.update_scrape(world).await;
+        }
 
         if let Some(slot) = slot {
             if let Ok(slot_response) = query!(
