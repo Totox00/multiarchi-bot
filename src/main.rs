@@ -126,7 +126,7 @@ async fn main() {
     let admins = vec![
         UserId::new(458684324653301770), // totox00
         UserId::new(622847469495123990), // dragorrod
-                                         // UserId::new(764623297932820501), // elirefeltores (tester)
+        UserId::new(764623297932820501), // elirefeltores (tester)
     ];
 
     let bot = Bot { db, admins };
