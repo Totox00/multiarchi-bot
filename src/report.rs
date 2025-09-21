@@ -5,6 +5,20 @@ use sqlx::query;
 
 use crate::{scrape::Status, util::SimpleReply, Bot, Command};
 
+enum Sort {
+    Sent,
+    Checks,
+}
+
+struct SlotResponse {
+    id: i64,
+    name: String,
+    status: i64,
+    checks: i64,
+    checks_total: i64,
+    last_activity: Option<i64>,
+}
+
 pub struct ReportCommand {}
 
 impl Command for ReportCommand {
@@ -14,16 +28,22 @@ impl Command for ReportCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "sort", "How to sort the slot, allowed values are `sent` or `checks`, defaults to `sent`").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::Integer, "page", "Report page to show, pages are 20 slots long and start at 1").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let mut world = "";
         let mut slot = None;
+        let mut sort = "sent";
+        let mut page = 1;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("world", ResolvedValue::String(value)) => world = value,
                 ("slot", ResolvedValue::String(value)) => slot = Some(value),
+                ("sort", ResolvedValue::String(value)) => sort = value,
+                ("page", ResolvedValue::Integer(value)) => page = value,
                 _ => (),
             }
         }
@@ -32,6 +52,13 @@ impl Command for ReportCommand {
             command.simple_reply(&ctx, "A world is required").await;
             return;
         }
+
+        let Some(sort) = Sort::try_from(sort) else {
+            command.simple_reply(&ctx, "Invalid sort option").await;
+            return;
+        };
+
+        let mut offset = (page - 1) * 20;
 
         let _ = command.defer_ephemeral(&ctx.http).await;
 
@@ -49,8 +76,9 @@ impl Command for ReportCommand {
             .await
             {
                 if let Ok(status_response) = query!(
-                    "SELECT timestamp, players.snowflake as player_id, description FROM updates INNER JOIN players ON updates.player = players.id WHERE slot = ? ORDER BY timestamp DESC LIMIT 20",
-                    slot_response.id
+                    "SELECT timestamp, players.snowflake as player_id, description FROM updates INNER JOIN players ON updates.player = players.id WHERE slot = ? ORDER BY timestamp DESC LIMIT 20 OFFSET ?",
+                    slot_response.id,
+                    offset
                 )
                 .fetch_all(&bot.db)
                 .await
@@ -100,13 +128,7 @@ impl Command for ReportCommand {
             } else {
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get slot info")).await;
             }
-        } else if let Ok(slot_response) = query!(
-            "SELECT id, name, status, checks, checks_total, last_activity FROM tracked_slots WHERE status < 3 AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) ORDER BY last_activity DESC NULLS FIRST",
-            world
-        )
-        .fetch_all(&bot.db)
-        .await
-        {
+        } else if let Some(slot_response) = fetch_slot_response(bot, sort, world).await {
             if slot_response.is_empty() {
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("World does not exist")).await;
                 return;
@@ -119,6 +141,11 @@ impl Command for ReportCommand {
             for (i, record) in slot_response.into_iter().enumerate() {
                 all_checks += record.checks;
                 all_checks_total += record.checks_total;
+
+                if offset > 0 {
+                    offset -= 1;
+                    continue;
+                }
 
                 if i >= 20 {
                     continue;
@@ -137,7 +164,10 @@ impl Command for ReportCommand {
                         }
                     }
 
-                let player_str = if let Ok(response) = query!("SELECT snowflake FROM claims INNER JOIN players ON claims.player = players.id WHERE slot = ?", record.id).fetch_one(&bot.db).await {
+                let player_str = if let Ok(response) = query!("SELECT snowflake FROM claims INNER JOIN players ON claims.player = players.id WHERE slot = ?", record.id)
+                    .fetch_one(&bot.db)
+                    .await
+                {
                     format!("**Claimed by**: <@{}>", response.snowflake)
                 } else {
                     String::from("*Unclaimed*")
@@ -185,4 +215,31 @@ impl Command for ReportCommand {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get slot info")).await;
         }
     }
+}
+
+impl Sort {
+    fn try_from(value: &str) -> Option<Self> {
+        match value {
+            "sent" => Some(Sort::Sent),
+            "checks" => Some(Sort::Checks),
+            _ => None,
+        }
+    }
+}
+
+async fn fetch_slot_response(bot: &Bot, sort: Sort, world: &str) -> Option<Vec<SlotResponse>> {
+    Some(match sort {
+        Sort::Sent => query!(
+            "SELECT id, name, status, checks, checks_total, last_activity FROM tracked_slots WHERE status < 3 AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) ORDER BY last_activity DESC NULLS FIRST",
+            world
+        )
+        .fetch_all(&bot.db)
+        .await.ok()?.into_iter().map(|record| SlotResponse { id: record.id, name: record.name, status: record.status, checks: record.checks, checks_total: record.checks_total, last_activity: record.last_activity }).collect(),
+        Sort::Checks => query!(
+            "SELECT id, name, status, checks, checks_total, last_activity FROM tracked_slots WHERE status < 3 AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) ORDER BY checks / checks_total DESC",
+            world
+        )
+        .fetch_all(&bot.db)
+        .await.ok()?.into_iter().map(|record| SlotResponse { id: record.id, name: record.name, status: record.status, checks: record.checks, checks_total: record.checks_total, last_activity: record.last_activity }).collect(),
+    })
 }
