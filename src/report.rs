@@ -138,7 +138,8 @@ impl Command for ReportCommand {
             let mut all_checks_total = 0;
             let mut slot_reports = vec![];
 
-            for (i, record) in slot_response.into_iter().enumerate() {
+            let mut i = 0;
+            for record in slot_response {
                 all_checks += record.checks;
                 all_checks_total += record.checks_total;
 
@@ -150,6 +151,7 @@ impl Command for ReportCommand {
                 if i >= 20 {
                     continue;
                 }
+                i += 1;
 
                 let mut updates = vec![];
 
