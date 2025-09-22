@@ -2,6 +2,8 @@
 #![feature(iter_array_chunks)]
 
 mod claim;
+mod claimed;
+mod finish_world;
 mod get_preclaims;
 mod mark_free;
 mod new_world;
@@ -20,7 +22,7 @@ use std::env;
 use dotenvy::from_filename_override;
 use new_world::NewWorldCommand;
 use serenity::{
-    all::{Command as SerenityCommand, CommandInteraction, Context, CreateCommand, EventHandler, GatewayIntents, Interaction, Ready, UserId},
+    all::{ChannelId, Command as SerenityCommand, CommandInteraction, Context, CreateCommand, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId, Interaction, Ready, UserId},
     async_trait, Client,
 };
 use sqlx::{
@@ -31,10 +33,12 @@ use sqlx::{
 use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
-    claim::ClaimCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand, status::StatusCommand, track_world::TrackWorldCommand,
-    unclaim::UnclaimCommand, unclaimed::UnclaimedCommand,
+    claim::ClaimCommand, claimed::ClaimedCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand,
+    status::StatusCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand,
 };
 
+const STATUS_GUILD: u64 = 903349199456841739;
+const STATUS_CHANNEL: u64 = 949331929872867348;
 const DEFAULT_CLAIMS: i64 = 1;
 
 struct Bot {
@@ -50,25 +54,34 @@ trait Command {
 struct Player {
     pub id: i64,
     pub claims: i64,
+    pub points: i64,
 }
 
 impl Bot {
     async fn get_player(&self, snowflake: i64) -> Option<Player> {
-        if let Ok(response) = query!("SELECT id, claims FROM players WHERE snowflake = ? LIMIT 1", snowflake).fetch_one(&self.db).await {
+        if let Ok(response) = query!("SELECT id, claims, points FROM players WHERE snowflake = ? LIMIT 1", snowflake).fetch_one(&self.db).await {
             Some(Player {
                 id: response.id,
                 claims: response.claims,
+                points: response.points,
             })
         } else {
-            let response = query!("INSERT INTO players (snowflake, claims) VALUES (?, ?) RETURNING id", snowflake, DEFAULT_CLAIMS)
+            let response = query!("INSERT INTO players (snowflake, claims) VALUES (?, ?) RETURNING id, points", snowflake, DEFAULT_CLAIMS)
                 .fetch_one(&self.db)
                 .await
                 .ok()?;
             Some(Player {
                 id: response.id,
                 claims: DEFAULT_CLAIMS,
+                points: response.points,
             })
         }
+    }
+
+    async fn status_channel(ctx: &Context) -> Option<GuildChannel> {
+        let guild = Guild::get(ctx, GuildId::new(STATUS_GUILD)).await.ok()?;
+        let mut channels = guild.channels(&ctx.http).await.ok()?;
+        channels.remove(&ChannelId::new(STATUS_CHANNEL))
     }
 }
 
@@ -86,6 +99,8 @@ impl EventHandler for Bot {
         register::<MarkFreeCommand>("mark-free", &ctx).await;
         register::<PublicCommand>("public", &ctx).await;
         register::<UnclaimedCommand>("unclaimed", &ctx).await;
+        register::<ClaimedCommand>("claimed", &ctx).await;
+        register::<FinishWorldCommand>("finish-world", &ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -102,6 +117,8 @@ impl EventHandler for Bot {
                 "mark-free" => MarkFreeCommand::execute(self, ctx, command).await,
                 "public" => PublicCommand::execute(self, ctx, command).await,
                 "unclaimed" => UnclaimedCommand::execute(self, ctx, command).await,
+                "claimed" => ClaimedCommand::execute(self, ctx, command).await,
+                "finish-world" => FinishWorldCommand::execute(self, ctx, command).await,
                 _ => (),
             },
             Interaction::Component(component) => {

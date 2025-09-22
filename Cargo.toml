@@ -13,3 +13,4 @@ dotenvy = "0.15.7"
 anyhow = "1.0.96"
 reqwest = "0.12.23"
 scraper = "0.24.0"
+phf = { version = "0.13.1", features = ["macros"] }

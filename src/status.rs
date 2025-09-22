@@ -1,12 +1,7 @@
-use serenity::all::{
-    ChannelId, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, Guild, GuildId, ResolvedOption, ResolvedValue,
-};
+use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
 use crate::{util::SimpleReply, Bot, Command};
-
-const STATUS_GUILD: u64 = 903349199456841739;
-const STATUS_CHANNEL: u64 = 949331929872867348;
 
 pub struct StatusCommand {}
 
@@ -58,14 +53,10 @@ impl Command for StatusCommand {
             .await
             .is_ok()
         {
-            if let Ok(guild) = Guild::get(&ctx, GuildId::new(STATUS_GUILD)).await {
-                if let Ok(channels) = guild.channels(&ctx.http).await {
-                    if let Some(status_channel) = channels.get(&ChannelId::new(STATUS_CHANNEL)) {
-                        let _ = status_channel
-                            .send_message(&ctx, CreateMessage::new().content(format!("[{}] [{world}] [{slot}] {description}", command.user.display_name())))
-                            .await;
-                    }
-                }
+            if let Some(status_channel) = Bot::status_channel(&ctx).await {
+                let _ = status_channel
+                    .send_message(&ctx, CreateMessage::new().content(format!("[{}] [{world}] [{slot}] {description}", command.user.display_name())))
+                    .await;
             }
 
             let _ = command
