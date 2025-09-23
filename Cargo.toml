@@ -10,7 +10,6 @@ tokio = {version = "1.43.0", features = ["rt-multi-thread", "macros"]}
 rand = "0.8.5"
 rand_distr = "0.4.3"
 dotenvy = "0.15.7"
-anyhow = "1.0.96"
 reqwest = "0.12.23"
 scraper = "0.24.0"
 phf = { version = "0.13.1", features = ["macros"] }
