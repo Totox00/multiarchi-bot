@@ -1,6 +1,7 @@
 #![feature(iter_next_chunk)]
 #![feature(iter_array_chunks)]
 
+mod cancel_preclaims;
 mod claim;
 mod claimed;
 mod finish_world;
@@ -9,6 +10,7 @@ mod mark_free;
 mod new_world;
 mod public;
 mod report;
+mod reschedule_preclaims;
 mod scrape;
 mod status;
 mod track_world;
@@ -16,6 +18,7 @@ mod unclaim;
 mod unclaimed;
 mod util;
 mod view_preclaims;
+mod worlds;
 
 use std::env;
 
@@ -33,8 +36,9 @@ use sqlx::{
 use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
-    claim::ClaimCommand, claimed::ClaimedCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand,
-    status::StatusCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand,
+    cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand,
+    public::PublicCommand, report::ReportCommand, reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
+    unclaimed::UnclaimedCommand, worlds::WorldsCommand,
 };
 
 const STATUS_GUILD: u64 = 903349199456841739;
@@ -47,6 +51,8 @@ struct Bot {
 }
 
 trait Command {
+    const NAME: &'static str;
+
     fn register() -> CreateCommand;
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction);
 }
@@ -88,42 +94,50 @@ impl Bot {
 #[async_trait]
 impl EventHandler for Bot {
     async fn ready(&self, ctx: Context, _ready: Ready) {
-        register::<ViewPreclaimsCommand>("view-preclaims", &ctx).await;
-        register::<NewWorldCommand>("new-world", &ctx).await;
-        register::<GetPreclaimsCommand>("get-preclaims", &ctx).await;
-        register::<TrackWorldCommand>("track-world", &ctx).await;
-        register::<ClaimCommand>("claim", &ctx).await;
-        register::<StatusCommand>("status", &ctx).await;
-        register::<ReportCommand>("report", &ctx).await;
-        register::<UnclaimCommand>("unclaim", &ctx).await;
-        register::<MarkFreeCommand>("mark-free", &ctx).await;
-        register::<PublicCommand>("public", &ctx).await;
-        register::<UnclaimedCommand>("unclaimed", &ctx).await;
-        register::<ClaimedCommand>("claimed", &ctx).await;
-        register::<FinishWorldCommand>("finish-world", &ctx).await;
+        register::<ViewPreclaimsCommand>(&ctx).await;
+        register::<NewWorldCommand>(&ctx).await;
+        register::<GetPreclaimsCommand>(&ctx).await;
+        register::<TrackWorldCommand>(&ctx).await;
+        register::<ClaimCommand>(&ctx).await;
+        register::<StatusCommand>(&ctx).await;
+        register::<ReportCommand>(&ctx).await;
+        register::<UnclaimCommand>(&ctx).await;
+        register::<MarkFreeCommand>(&ctx).await;
+        register::<PublicCommand>(&ctx).await;
+        register::<UnclaimedCommand>(&ctx).await;
+        register::<ClaimedCommand>(&ctx).await;
+        register::<FinishWorldCommand>(&ctx).await;
+        register::<ReschedulePreclaimsCommand>(&ctx).await;
+        register::<CancelPreclaimsCommand>(&ctx).await;
+        register::<WorldsCommand>(&ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
             Interaction::Command(command) => match command.data.name.as_str() {
-                "view-preclaims" => ViewPreclaimsCommand::execute(self, ctx, command).await,
-                "new-world" => NewWorldCommand::execute(self, ctx, command).await,
-                "get-preclaims" => GetPreclaimsCommand::execute(self, ctx, command).await,
-                "track-world" => TrackWorldCommand::execute(self, ctx, command).await,
-                "claim" => ClaimCommand::execute(self, ctx, command).await,
-                "status" => StatusCommand::execute(self, ctx, command).await,
-                "report" => ReportCommand::execute(self, ctx, command).await,
-                "unclaim" => UnclaimCommand::execute(self, ctx, command).await,
-                "mark-free" => MarkFreeCommand::execute(self, ctx, command).await,
-                "public" => PublicCommand::execute(self, ctx, command).await,
-                "unclaimed" => UnclaimedCommand::execute(self, ctx, command).await,
-                "claimed" => ClaimedCommand::execute(self, ctx, command).await,
-                "finish-world" => FinishWorldCommand::execute(self, ctx, command).await,
+                ViewPreclaimsCommand::NAME => ViewPreclaimsCommand::execute(self, ctx, command).await,
+                NewWorldCommand::NAME => NewWorldCommand::execute(self, ctx, command).await,
+                GetPreclaimsCommand::NAME => GetPreclaimsCommand::execute(self, ctx, command).await,
+                TrackWorldCommand::NAME => TrackWorldCommand::execute(self, ctx, command).await,
+                ClaimCommand::NAME => ClaimCommand::execute(self, ctx, command).await,
+                StatusCommand::NAME => StatusCommand::execute(self, ctx, command).await,
+                ReportCommand::NAME => ReportCommand::execute(self, ctx, command).await,
+                UnclaimCommand::NAME => UnclaimCommand::execute(self, ctx, command).await,
+                MarkFreeCommand::NAME => MarkFreeCommand::execute(self, ctx, command).await,
+                PublicCommand::NAME => PublicCommand::execute(self, ctx, command).await,
+                UnclaimedCommand::NAME => UnclaimedCommand::execute(self, ctx, command).await,
+                ClaimedCommand::NAME => ClaimedCommand::execute(self, ctx, command).await,
+                FinishWorldCommand::NAME => FinishWorldCommand::execute(self, ctx, command).await,
+                ReschedulePreclaimsCommand::NAME => ReschedulePreclaimsCommand::execute(self, ctx, command).await,
+                CancelPreclaimsCommand::NAME => CancelPreclaimsCommand::execute(self, ctx, command).await,
+                WorldsCommand::NAME => WorldsCommand::execute(self, ctx, command).await,
                 _ => (),
             },
             Interaction::Component(component) => {
                 if let Some((_, rest)) = component.data.custom_id.split_once("view-preclaims-") {
                     ViewPreclaimsCommand::handle_interraction(self, ctx, &component, rest).await;
+                } else if let Some((_, rest)) = component.data.custom_id.split_once("unclaimed-") {
+                    UnclaimedCommand::handle_interraction(self, ctx, &component, rest).await;
                 }
             }
             _ => (),
@@ -159,8 +173,8 @@ async fn main() {
     }
 }
 
-async fn register<T: Command>(name: &str, ctx: &Context) {
+async fn register<T: Command>(ctx: &Context) {
     if let Err(err) = SerenityCommand::create_global_command(&ctx.http, T::register()).await {
-        println!("Failed to create {name} command: {err}");
+        println!("Failed to create {} command: {err}", T::NAME);
     }
 }

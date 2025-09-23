@@ -6,8 +6,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct MarkFreeCommand {}
 
 impl Command for MarkFreeCommand {
+    const NAME: &'static str = "mark-free";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("mark-free")
+        CreateCommand::new(Self::NAME)
             .description("Marks a slot in a world as a free claim")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

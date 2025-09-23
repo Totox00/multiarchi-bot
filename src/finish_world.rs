@@ -9,8 +9,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct FinishWorldCommand {}
 
 impl Command for FinishWorldCommand {
+    const NAME: &'static str = "finish-world";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("finish-world")
+        CreateCommand::new(Self::NAME)
             .description("Awards points for a world and deletes it and all claims in it")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

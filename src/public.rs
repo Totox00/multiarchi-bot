@@ -8,8 +8,10 @@ use crate::{Bot, Command};
 pub struct PublicCommand {}
 
 impl Command for PublicCommand {
+    const NAME: &'static str = "public";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("public")
+        CreateCommand::new(Self::NAME)
             .description("View public slots or mark a slot of yours as public")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(false))

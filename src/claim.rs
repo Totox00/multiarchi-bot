@@ -6,8 +6,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct ClaimCommand {}
 
 impl Command for ClaimCommand {
+    const NAME: &'static str = "claim";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("claim")
+        CreateCommand::new(Self::NAME)
             .description("Claim a slot in a world")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

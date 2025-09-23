@@ -6,8 +6,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct StatusCommand {}
 
 impl Command for StatusCommand {
+    const NAME: &'static str = "status";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("status")
+        CreateCommand::new(Self::NAME)
             .description("Report the status of a slot")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

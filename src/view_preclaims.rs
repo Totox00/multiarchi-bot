@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
-use serenity::{
-    all::{
-        ButtonStyle, Colour, CommandInteraction, CommandType, ComponentInteraction, ComponentInteractionDataKind, Context, CreateActionRow, CreateButton, CreateCommand, CreateEmbed,
-        CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, Timestamp,
-    },
-    futures::future::join_all,
+use serenity::all::{
+    ButtonStyle, Colour, CommandInteraction, CommandType, ComponentInteraction, ComponentInteractionDataKind, Context, CreateActionRow, CreateButton, CreateCommand, CreateEmbed, CreateEmbedFooter,
+    CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, Timestamp,
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{
+    util::{get_page, SimpleReply},
+    Bot, Command,
+};
 
 struct World {
     name: String,
@@ -23,40 +23,52 @@ struct Slot {
     games: String,
     notes: String,
     points: String,
+    current_preclaim: bool,
 }
 
 pub struct ViewPreclaimsCommand {}
 
 impl Command for ViewPreclaimsCommand {
+    const NAME: &'static str = "view-preclaims";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("view-preclaims").description("View worlds with possible preclaims").kind(CommandType::ChatInput)
+        CreateCommand::new(Self::NAME).description("View worlds with possible preclaims").kind(CommandType::ChatInput)
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
-        let worlds = if let Some(worlds) = get_worlds(bot).await {
-            worlds
-        } else {
+        let user_id = i64::from(command.user.id);
+        let Some(player) = bot.get_player(user_id).await else {
+            command.simple_reply(&ctx, "Failed to get player").await;
+            return;
+        };
+
+        let Some(worlds) = get_worlds(bot).await else {
             command.simple_reply(&ctx, "Failed to get current worlds").await;
             return;
         };
 
-        let first_world = if let Some(world) = worlds.first() {
-            world
-        } else {
+        let Some(first_world) = worlds.first() else {
             command.simple_reply(&ctx, "There are no worlds currently accepting preclaims").await;
             return;
         };
 
-        let page_count = worlds.iter().map(|world| if world.slots.len() <= 25 { 1 } else { world.slots.len().div_ceil(20) }).sum();
+        let page_count = worlds.iter().map(|world| if world.slots.len() <= 24 { 1 } else { world.slots.len().div_ceil(20) }).sum();
+
+        let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE player = ?", player.id)
+            .fetch_one(&bot.db)
+            .await
+            .map(|record| record.name)
+            .ok();
 
         let _ = command
             .create_response(
                 &ctx.http,
                 CreateInteractionResponse::Message(build_embed(
                     first_world,
-                    get_slot_details(bot, if first_world.slots.len() <= 25 { &first_world.slots[..] } else { &first_world.slots[0..20] }).await,
+                    get_slot_details(bot, if first_world.slots.len() <= 24 { &first_world.slots[..] } else { &first_world.slots[0..20] }, player.id).await,
                     0,
                     page_count,
+                    current_preclaim,
                 )),
             )
             .await;
@@ -106,13 +118,19 @@ impl ViewPreclaimsCommand {
                     return;
                 }
             } else {
-                interaction.simple_reply(&ctx, "Failed to get user").await;
+                interaction.simple_reply(&ctx, "Failed to get player").await;
                 return;
             }
 
             interaction.simple_reply(&ctx, "Successfully preclaimed slot").await;
         } else if let Some((_, rest)) = id.split_once("page-") {
             if let Ok(new_page) = rest.parse::<usize>() {
+                let user_id = i64::from(interaction.user.id);
+                let Some(player) = bot.get_player(user_id).await else {
+                    interaction.simple_reply(&ctx, "Failed to get player").await;
+                    return;
+                };
+
                 let worlds = if let Some(worlds) = get_worlds(bot).await {
                     worlds
                 } else {
@@ -120,22 +138,28 @@ impl ViewPreclaimsCommand {
                     return;
                 };
 
-                let page_count = worlds.iter().map(|world| if world.slots.len() <= 25 { 1 } else { world.slots.len().div_ceil(20) }).sum();
+                let page_count = worlds.iter().map(|world| if world.slots.len() <= 24 { 1 } else { world.slots.len().div_ceil(20) }).sum();
 
                 if new_page >= page_count {
                     interaction.simple_reply(&ctx, "Invalid page").await;
                     return;
                 }
 
-                let (world, slots) = if let Some((world, slots)) = get_correct_page(&worlds, new_page) {
-                    (world, get_slot_details(bot, slots).await)
+                let (world, slots) = if let Some((world, slots)) = get_page(&worlds, |world| &world.slots, new_page) {
+                    (world, get_slot_details(bot, slots, player.id).await)
                 } else {
                     interaction.simple_reply(&ctx, "Invalid page").await;
                     return;
                 };
 
+                let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE player = ?", player.id)
+                    .fetch_one(&bot.db)
+                    .await
+                    .map(|record| record.name)
+                    .ok();
+
                 let _ = interaction
-                    .create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(build_embed(world, slots, new_page, page_count)))
+                    .create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(build_embed(world, slots, new_page, page_count, current_preclaim)))
                     .await;
             } else {
                 interaction.simple_reply(&ctx, "Malformed page number").await;
@@ -147,10 +171,11 @@ impl ViewPreclaimsCommand {
 }
 
 async fn get_worlds(bot: &Bot) -> Option<Vec<World>> {
-    if let Ok(response) =
-        query!("SELECT worlds.name AS world_name, preclaim_end, slots.id AS slot_id FROM worlds INNER JOIN slots ON worlds.id = slots.world WHERE preclaim_end > strftime('%s', 'now')")
-            .fetch_all(&bot.db)
-            .await
+    if let Ok(response) = query!(
+        "SELECT worlds.name AS world_name, preclaim_end, slots.id AS slot_id FROM worlds INNER JOIN slots ON worlds.id = slots.world WHERE preclaim_end > strftime('%s', 'now') ORDER BY slots.name"
+    )
+    .fetch_all(&bot.db)
+    .await
     {
         let mut worlds: HashMap<String, (i64, Vec<i64>)> = HashMap::new();
 
@@ -176,55 +201,31 @@ async fn get_worlds(bot: &Bot) -> Option<Vec<World>> {
     }
 }
 
-async fn get_slot_details(bot: &Bot, slots: &[i64]) -> Vec<Slot> {
-    join_all(
-        slots
-            .iter()
-            .map(async |id| (id, query!("SELECT name, games, notes, points FROM slots WHERE id = ? LIMIT 1", id).fetch_one(&bot.db).await)),
-    )
-    .await
-    .into_iter()
-    .filter_map(|(id, response)| {
-        if let Ok(record) = response {
-            Some(Slot {
-                id: *id,
-                name: record.name,
-                games: record.games,
-                notes: record.notes,
-                points: record.points,
-            })
-        } else {
-            None
+async fn get_slot_details(bot: &Bot, slots: &[i64], player: i64) -> Vec<Slot> {
+    let mut out = vec![];
+
+    for slot in slots {
+        if let Ok(response) = query!("SELECT name, games, notes, points FROM slots WHERE id = ? LIMIT 1", slot).fetch_one(&bot.db).await {
+            let current_preclaim = query!("SELECT status FROM preclaims WHERE slot = ? AND player = ? LIMIT 1", slot, player)
+                .fetch_one(&bot.db)
+                .await
+                .is_ok();
+
+            out.push(Slot {
+                id: *slot,
+                name: response.name,
+                games: response.games,
+                notes: response.notes,
+                points: response.points,
+                current_preclaim,
+            });
         }
-    })
-    .collect()
-}
-
-fn get_correct_page(worlds: &[World], mut page: usize) -> Option<(&World, &[i64])> {
-    let mut worlds_iter = worlds.iter();
-
-    let mut current_world = worlds_iter.next()?;
-    let mut current_start = 0;
-
-    while page != 0 {
-        if current_world.slots.len() <= 25 || current_world.slots.len() - current_start <= 20 {
-            current_world = worlds_iter.next()?;
-        } else {
-            current_start += 20;
-        }
-
-        page -= 1;
     }
 
-    if current_world.slots.len() <= 25 {
-        Some((current_world, current_world.slots.as_slice()))
-    } else {
-        let end = current_world.slots.len().min(current_start + 20);
-        Some((current_world, &current_world.slots[current_start..end]))
-    }
+    out
 }
 
-fn build_embed(world: &World, slots: Vec<Slot>, page: usize, page_count: usize) -> CreateInteractionResponseMessage {
+fn build_embed(world: &World, slots: Vec<Slot>, page: usize, page_count: usize, current_preclaim: Option<String>) -> CreateInteractionResponseMessage {
     let mut components = vec![];
 
     if page_count > 1 {
@@ -263,17 +264,27 @@ fn build_embed(world: &World, slots: Vec<Slot>, page: usize, page_count: usize) 
                 .footer(CreateEmbedFooter::new("Preclaim end:"))
                 .timestamp(Timestamp::from_unix_timestamp(world.preclaim_end).unwrap_or_default())
                 .colour(Colour::DARK_PURPLE)
-                .fields(slots.iter().map(|Slot { id: _, name, games, notes, points }| {
-                    (
-                        format!("`{name}`"),
-                        if notes.is_empty() {
-                            format!("{games}\nPoints: {points}")
-                        } else {
-                            format!("{games}\n*{notes}*\nPoints: {points}")
-                        },
-                        false,
-                    )
-                })),
+                .field("Current preclaim", current_preclaim.unwrap_or(String::from("*None*")), false)
+                .fields(slots.iter().map(
+                    |Slot {
+                         id: _,
+                         name,
+                         games,
+                         notes,
+                         points,
+                         current_preclaim,
+                     }| {
+                        (
+                            format!("`{name}`{}", if *current_preclaim { " [Current Preclaim]" } else { "" }),
+                            if notes.is_empty() {
+                                format!("{games}\nPoints: {points}")
+                            } else {
+                                format!("{games}\n*{notes}*\nPoints: {points}")
+                            },
+                            false,
+                        )
+                    },
+                )),
         )
         .ephemeral(true)
         .components(components)

@@ -1,4 +1,4 @@
-use serenity::all::{CommandInteraction, CommandType, Context, CreateCommand, CreateEmbed, EditInteractionResponse};
+use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, EditInteractionResponse, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
 use crate::{scrape::Status, util::SimpleReply, Bot, Command};
@@ -6,12 +6,23 @@ use crate::{scrape::Status, util::SimpleReply, Bot, Command};
 pub struct ClaimedCommand {}
 
 impl Command for ClaimedCommand {
+    const NAME: &'static str = "claimed";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("claimed").description("View your claimed slots").kind(CommandType::ChatInput)
+        CreateCommand::new(Self::NAME)
+            .description("View claimed slots")
+            .kind(CommandType::ChatInput)
+            .add_option(CreateCommandOption::new(CommandOptionType::User, "player", "Player to view claimed slots for, defaults to yourself").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
-        let user = i64::from(command.user.id);
+        let mut user = i64::from(command.user.id);
+
+        for ResolvedOption { name: option_name, value, .. } in command.data.options() {
+            if let ("player", ResolvedValue::User(value, _)) = (option_name, value) {
+                user = i64::from(value.id);
+            }
+        }
 
         let player = if let Some(player) = bot.get_player(user).await {
             player

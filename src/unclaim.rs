@@ -6,8 +6,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct UnclaimCommand {}
 
 impl Command for UnclaimCommand {
+    const NAME: &'static str = "unclaim";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("unclaim")
+        CreateCommand::new(Self::NAME)
             .description("Forcibly unclaims a slot")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

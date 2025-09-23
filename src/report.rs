@@ -22,8 +22,10 @@ struct SlotResponse {
 pub struct ReportCommand {}
 
 impl Command for ReportCommand {
+    const NAME: &'static str = "report";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("report")
+        CreateCommand::new(Self::NAME)
             .description("Gets a report")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))

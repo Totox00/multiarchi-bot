@@ -12,8 +12,10 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct GetPreclaimsCommand {}
 
 impl Command for GetPreclaimsCommand {
+    const NAME: &'static str = "get-preclaims";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("get-preclaims")
+        CreateCommand::new(Self::NAME)
             .description("Gets preclaims for a world")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the world").required(true))

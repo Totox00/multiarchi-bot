@@ -11,8 +11,10 @@ use crate::{
 pub struct TrackWorldCommand {}
 
 impl Command for TrackWorldCommand {
+    const NAME: &'static str = "track-world";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("track-world")
+        CreateCommand::new(Self::NAME)
             .description("Tracks a new world")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "tracker", "Link to or id of the tracker for this world").required(true))

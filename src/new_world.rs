@@ -11,12 +11,14 @@ use crate::{util::SimpleReply, Bot, Command};
 pub struct NewWorldCommand {}
 
 impl Command for NewWorldCommand {
+    const NAME: &'static str = "new-world";
+
     fn register() -> CreateCommand {
-        CreateCommand::new("new-world")
+        CreateCommand::new(Self::NAME)
             .description("Creates a new world")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the new world").required(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::Number, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::Integer, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls").required(true))
     }
 
@@ -35,7 +37,7 @@ impl Command for NewWorldCommand {
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("world-name", ResolvedValue::String(value)) => name = value,
-                ("preclaim-end", ResolvedValue::Number(value)) => preclaim_end = value as u64,
+                ("preclaim-end", ResolvedValue::Integer(value)) => preclaim_end = value,
                 ("slot-file", ResolvedValue::Attachment(value)) => slot_file = Some(value),
                 _ => (),
             }
@@ -48,7 +50,7 @@ impl Command for NewWorldCommand {
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
 
-        if current_time.as_secs() > preclaim_end {
+        if current_time.as_secs() > preclaim_end as u64 {
             command.simple_reply(&ctx, "The specified preclaim end is in the past").await;
             return;
         }
@@ -85,10 +87,7 @@ impl Command for NewWorldCommand {
             return;
         };
 
-        let preclaim_end_i64 = preclaim_end as i64;
-        let user_snowflake = i64::from(user);
-
-        if let Ok(response) = query!("INSERT INTO worlds (name, preclaim_end, creator) VALUES (?, ?, ?) RETURNING id", name, preclaim_end_i64, user_snowflake)
+        if let Ok(response) = query!("INSERT INTO worlds (name, preclaim_end) VALUES (?, ?) RETURNING id", name, preclaim_end)
             .fetch_one(&bot.db)
             .await
         {
