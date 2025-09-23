@@ -37,7 +37,7 @@ impl Command for ViewPreclaimsCommand {
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let user_id = i64::from(command.user.id);
-        let Some(player) = bot.get_player(user_id).await else {
+        let Some(player) = bot.get_player(user_id, &command.user.name).await else {
             command.simple_reply(&ctx, "Failed to get player").await;
             return;
         };
@@ -97,7 +97,7 @@ impl ViewPreclaimsCommand {
                 return;
             };
 
-            if let Some(player) = bot.get_player(user_id).await {
+            if let Some(player) = bot.get_player(user_id, &interaction.user.name).await {
                 if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ?", player.id).fetch_optional(&bot.db).await {
                     if response.is_some_and(|record| record.claims > 0) {
                         interaction.simple_reply(&ctx, "Cannot preclaim with current claims").await;
@@ -126,7 +126,7 @@ impl ViewPreclaimsCommand {
         } else if let Some((_, rest)) = id.split_once("page-") {
             if let Ok(new_page) = rest.parse::<usize>() {
                 let user_id = i64::from(interaction.user.id);
-                let Some(player) = bot.get_player(user_id).await else {
+                let Some(player) = bot.get_player(user_id, &interaction.user.name).await else {
                     interaction.simple_reply(&ctx, "Failed to get player").await;
                     return;
                 };

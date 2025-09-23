@@ -33,6 +33,8 @@ impl Command for WorldsCommand {
                     bot.update_scrape(&record.name).await;
                 }
             }
+
+            bot.push_to_sheet().await;
         }
 
         if let Ok(response) = query_as!(World, "SELECT name, unclaimed, in_progress, goal, all_checks, done FROM worlds_overview ORDER BY id")

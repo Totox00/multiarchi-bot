@@ -41,7 +41,7 @@ impl Command for StatusCommand {
             return;
         };
 
-        let player = if let Some(player) = bot.get_player(i64::from(command.user.id)).await {
+        let player = if let Some(player) = bot.get_player(i64::from(command.user.id), &command.user.name).await {
             player
         } else {
             command.simple_reply(&ctx, "Failed to get user").await;

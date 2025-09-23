@@ -24,7 +24,7 @@ impl Command for ClaimedCommand {
             }
         }
 
-        let player = if let Some(player) = bot.get_player(user).await {
+        let player = if let Some(player) = bot.get_player(user, &command.user.name).await {
             player
         } else {
             command.simple_reply(&ctx, "Failed to get user").await;
