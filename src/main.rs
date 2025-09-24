@@ -121,7 +121,7 @@ impl Bot {
             .values_update(
                 ValueRange {
                     major_dimension: Some(String::from("ROWS")),
-                    range: Some(String::from("data!A1:D")),
+                    range: Some(String::from(SHEET_RANGE)),
                     values: Some(
                         data.into_iter()
                             .filter_map(|record| {
