@@ -58,8 +58,8 @@ use crate::{
 const STATUS_GUILD: u64 = 903349199456841739;
 const STATUS_CHANNEL: u64 = 949331929872867348;
 const DEFAULT_CLAIMS: i64 = 1;
-const SHEET_ID: &str = "10HUN4HG3m9kQZAwZVYSn0k4GkPYCd6lzBeip5Eh1DFU";
-const SHEET_RANGE: &str = "data!A1:D";
+const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
+const SHEET_RANGE: &str = "autodata!A1:D";
 
 struct Bot {
     db: SqlitePool,
