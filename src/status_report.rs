@@ -19,14 +19,14 @@ struct SlotResponse {
     last_activity: Option<i64>,
 }
 
-pub struct ReportCommand {}
+pub struct StatusReportCommand {}
 
-impl Command for ReportCommand {
-    const NAME: &'static str = "report";
+impl Command for StatusReportCommand {
+    const NAME: &'static str = "status-report";
 
     fn register() -> CreateCommand {
         CreateCommand::new(Self::NAME)
-            .description("Gets a report")
+            .description("Gets a status report")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false))

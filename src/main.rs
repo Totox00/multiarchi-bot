@@ -10,7 +10,7 @@ mod get_preclaims;
 mod mark_free;
 mod new_world;
 mod public;
-mod report;
+mod status_report;
 mod reschedule_preclaims;
 mod scrape;
 mod status;
@@ -51,12 +51,14 @@ use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
     cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand,
-    mark_free::MarkFreeCommand, public::PublicCommand, report::ReportCommand, reschedule_preclaims::ReschedulePreclaimsCommand, scrape::Status, status::StatusCommand, track_world::TrackWorldCommand,
+    mark_free::MarkFreeCommand, public::PublicCommand, status_report::StatusReportCommand, reschedule_preclaims::ReschedulePreclaimsCommand, scrape::Status, status::StatusCommand, track_world::TrackWorldCommand,
     unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, worlds::WorldsCommand,
 };
 
 const STATUS_GUILD: u64 = 903349199456841739;
 const STATUS_CHANNEL: u64 = 949331929872867348;
+const SYSTEM_GUILD: u64 = 1342189623757242439;
+const SYSTEM_CHANNEL: u64 = 1420513532247674901;
 const DEFAULT_CLAIMS: i64 = 1;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
 const SHEET_RANGE: &str = "autodata!A1:D";
@@ -106,6 +108,12 @@ impl Bot {
         let guild = Guild::get(ctx, GuildId::new(STATUS_GUILD)).await.ok()?;
         let mut channels = guild.channels(&ctx.http).await.ok()?;
         channels.remove(&ChannelId::new(STATUS_CHANNEL))
+    }
+
+    async fn system_channel(ctx: &Context) -> Option<GuildChannel> {
+        let guild = Guild::get(ctx, GuildId::new(SYSTEM_GUILD)).await.ok()?;
+        let mut channels = guild.channels(&ctx.http).await.ok()?;
+        channels.remove(&ChannelId::new(SYSTEM_CHANNEL))
     }
 
     async fn push_to_sheet(&self) {
@@ -163,7 +171,7 @@ impl EventHandler for Bot {
         register::<TrackWorldCommand>(&ctx).await;
         register::<ClaimCommand>(&ctx).await;
         register::<StatusCommand>(&ctx).await;
-        register::<ReportCommand>(&ctx).await;
+        register::<StatusReportCommand>(&ctx).await;
         register::<UnclaimCommand>(&ctx).await;
         register::<MarkFreeCommand>(&ctx).await;
         register::<PublicCommand>(&ctx).await;
@@ -185,7 +193,7 @@ impl EventHandler for Bot {
                 TrackWorldCommand::NAME => TrackWorldCommand::execute(self, ctx, command).await,
                 ClaimCommand::NAME => ClaimCommand::execute(self, ctx, command).await,
                 StatusCommand::NAME => StatusCommand::execute(self, ctx, command).await,
-                ReportCommand::NAME => ReportCommand::execute(self, ctx, command).await,
+                StatusReportCommand::NAME => StatusReportCommand::execute(self, ctx, command).await,
                 UnclaimCommand::NAME => UnclaimCommand::execute(self, ctx, command).await,
                 MarkFreeCommand::NAME => MarkFreeCommand::execute(self, ctx, command).await,
                 PublicCommand::NAME => PublicCommand::execute(self, ctx, command).await,
