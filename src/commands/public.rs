@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, EditInteractionResponse, ResolvedOption, ResolvedValue};
+use serenity::all::{
+    AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, EditInteractionResponse, ResolvedOption, ResolvedValue,
+};
 use sqlx::query;
 
-use crate::{Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, Bot};
 
 pub struct PublicCommand {}
 
@@ -14,8 +16,8 @@ impl Command for PublicCommand {
         CreateCommand::new(Self::NAME)
             .description("View public slots or mark a slot of yours as public")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(false))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(false).set_autocomplete(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false).set_autocomplete(true))
             .add_option(
                 CreateCommandOption::new(
                     CommandOptionType::String,
@@ -131,6 +133,25 @@ impl Command for PublicCommand {
             }
         } else {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to mark claim as public")).await;
+        }
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_worlds(ctx, &interaction, value).await,
+            Some(AutocompleteOption { name: "slot", value, .. }) => {
+                let mut world = None;
+                for ResolvedOption { name: option_name, value, .. } in interaction.data.options() {
+                    if let ("world", ResolvedValue::String(value)) = (option_name, value) {
+                        world = Some(value)
+                    }
+                }
+
+                bot.autocomplete_slots(ctx, &interaction, value, world).await;
+            }
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
         }
     }
 }

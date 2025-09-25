@@ -1,7 +1,7 @@
 use serenity::all::{CommandInteraction, CommandType, Context, CreateCommand, CreateEmbed, CreateInteractionResponseFollowup, EditInteractionResponse};
 use sqlx::{query, query_as};
 
-use crate::{Bot, Command};
+use crate::{commands::Command, Bot};
 
 enum World {
     Tracked(TrackedWorld),

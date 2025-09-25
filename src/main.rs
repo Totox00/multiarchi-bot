@@ -1,25 +1,11 @@
 #![feature(iter_next_chunk)]
 #![feature(iter_array_chunks)]
 
-mod cancel_preclaims;
-mod claim;
-mod claimed;
-mod done;
-mod finish_world;
-mod get_preclaims;
-mod mark_free;
-mod new_world;
-mod public;
-mod reschedule_preclaims;
+mod autocomplete;
+mod channels;
+mod commands;
 mod scrape;
-mod status;
-mod status_report;
-mod track_world;
-mod unclaim;
-mod unclaimed;
 mod util;
-mod view_preclaims;
-mod worlds;
 
 use std::env;
 
@@ -35,11 +21,10 @@ use google_sheets4::{
 };
 use http_body_util::combinators::BoxBody;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use new_world::NewWorldCommand;
 use rustls::crypto::{aws_lc_rs, CryptoProvider};
 use serde_json::json;
 use serenity::{
-    all::{ChannelId, Command as SerenityCommand, CommandInteraction, Context, CreateCommand, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId, Interaction, Ready, UserId},
+    all::{Context, EventHandler, GatewayIntents, Interaction, Ready, UserId},
     async_trait, Client as DiscordClient,
 };
 use sqlx::{
@@ -47,20 +32,12 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
-use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
-    cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand,
-    mark_free::MarkFreeCommand, public::PublicCommand, reschedule_preclaims::ReschedulePreclaimsCommand, scrape::Status, status::StatusCommand, status_report::StatusReportCommand,
-    track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, worlds::WorldsCommand,
+    commands::{interaction_create, register_all},
+    scrape::Status,
 };
 
-const STATUS_GUILD: u64 = 903349199456841739;
-const STATUS_CHANNEL: u64 = 949331929872867348;
-const MULTIARCHI_GUILD: u64 = 903349199456841739; // 1342189623757242439;
-const SYSTEM_CHANNEL: u64 = 949331929872867348; // 1420513532247674901;
-const CLAIMS_CHANNEL: u64 = 949331929872867348; // 1342191337998516328;
-const PRECLAIMS_CHANNEL: u64 = 949331929872867348; // 1342191316318162967;
 const DEFAULT_CLAIMS: i64 = 1;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
 const SHEET_RANGE: &str = "autodata!A1:D";
@@ -69,13 +46,6 @@ struct Bot {
     db: SqlitePool,
     admins: Vec<UserId>,
     sheets: Sheets<HttpsConnector<HttpConnector>>,
-}
-
-trait Command {
-    const NAME: &'static str;
-
-    fn register() -> CreateCommand;
-    async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction);
 }
 
 struct Player {
@@ -104,30 +74,6 @@ impl Bot {
                 points: response.points,
             })
         }
-    }
-
-    async fn status_channel(ctx: &Context) -> Option<GuildChannel> {
-        let guild = Guild::get(ctx, GuildId::new(STATUS_GUILD)).await.ok()?;
-        let mut channels = guild.channels(&ctx.http).await.ok()?;
-        channels.remove(&ChannelId::new(STATUS_CHANNEL))
-    }
-
-    async fn system_channel(ctx: &Context) -> Option<GuildChannel> {
-        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
-        let mut channels = guild.channels(&ctx.http).await.ok()?;
-        channels.remove(&ChannelId::new(SYSTEM_CHANNEL))
-    }
-
-    async fn claims_channel(ctx: &Context) -> Option<GuildChannel> {
-        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
-        let mut channels = guild.channels(&ctx.http).await.ok()?;
-        channels.remove(&ChannelId::new(CLAIMS_CHANNEL))
-    }
-
-    async fn preclaims_channel(ctx: &Context) -> Option<GuildChannel> {
-        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
-        let mut channels = guild.channels(&ctx.http).await.ok()?;
-        channels.remove(&ChannelId::new(PRECLAIMS_CHANNEL))
     }
 
     async fn push_to_sheet(&self) {
@@ -179,56 +125,11 @@ impl Bot {
 #[async_trait]
 impl EventHandler for Bot {
     async fn ready(&self, ctx: Context, _ready: Ready) {
-        register::<ViewPreclaimsCommand>(&ctx).await;
-        register::<NewWorldCommand>(&ctx).await;
-        register::<GetPreclaimsCommand>(&ctx).await;
-        register::<TrackWorldCommand>(&ctx).await;
-        register::<ClaimCommand>(&ctx).await;
-        register::<StatusCommand>(&ctx).await;
-        register::<StatusReportCommand>(&ctx).await;
-        register::<UnclaimCommand>(&ctx).await;
-        register::<MarkFreeCommand>(&ctx).await;
-        register::<PublicCommand>(&ctx).await;
-        register::<UnclaimedCommand>(&ctx).await;
-        register::<ClaimedCommand>(&ctx).await;
-        register::<FinishWorldCommand>(&ctx).await;
-        register::<ReschedulePreclaimsCommand>(&ctx).await;
-        register::<CancelPreclaimsCommand>(&ctx).await;
-        register::<WorldsCommand>(&ctx).await;
-        register::<DoneCommand>(&ctx).await;
+        register_all(&ctx).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        match interaction {
-            Interaction::Command(command) => match command.data.name.as_str() {
-                ViewPreclaimsCommand::NAME => ViewPreclaimsCommand::execute(self, ctx, command).await,
-                NewWorldCommand::NAME => NewWorldCommand::execute(self, ctx, command).await,
-                GetPreclaimsCommand::NAME => GetPreclaimsCommand::execute(self, ctx, command).await,
-                TrackWorldCommand::NAME => TrackWorldCommand::execute(self, ctx, command).await,
-                ClaimCommand::NAME => ClaimCommand::execute(self, ctx, command).await,
-                StatusCommand::NAME => StatusCommand::execute(self, ctx, command).await,
-                StatusReportCommand::NAME => StatusReportCommand::execute(self, ctx, command).await,
-                UnclaimCommand::NAME => UnclaimCommand::execute(self, ctx, command).await,
-                MarkFreeCommand::NAME => MarkFreeCommand::execute(self, ctx, command).await,
-                PublicCommand::NAME => PublicCommand::execute(self, ctx, command).await,
-                UnclaimedCommand::NAME => UnclaimedCommand::execute(self, ctx, command).await,
-                ClaimedCommand::NAME => ClaimedCommand::execute(self, ctx, command).await,
-                FinishWorldCommand::NAME => FinishWorldCommand::execute(self, ctx, command).await,
-                ReschedulePreclaimsCommand::NAME => ReschedulePreclaimsCommand::execute(self, ctx, command).await,
-                CancelPreclaimsCommand::NAME => CancelPreclaimsCommand::execute(self, ctx, command).await,
-                WorldsCommand::NAME => WorldsCommand::execute(self, ctx, command).await,
-                DoneCommand::NAME => DoneCommand::execute(self, ctx, command).await,
-                _ => (),
-            },
-            Interaction::Component(component) => {
-                if let Some((_, rest)) = component.data.custom_id.split_once("view-preclaims-") {
-                    ViewPreclaimsCommand::handle_interraction(self, ctx, &component, rest).await;
-                } else if let Some((_, rest)) = component.data.custom_id.split_once("unclaimed-") {
-                    UnclaimedCommand::handle_interraction(self, ctx, &component, rest).await;
-                }
-            }
-            _ => (),
-        }
+        interaction_create(self, ctx, interaction).await;
     }
 }
 
@@ -286,11 +187,5 @@ async fn main() {
 
     if let Err(err) = client.start().await {
         println!("Client error: {err:?}");
-    }
-}
-
-async fn register<T: Command>(ctx: &Context) {
-    if let Err(err) = SerenityCommand::create_global_command(&ctx.http, T::register()).await {
-        println!("Failed to create {} command: {err}", T::NAME);
     }
 }

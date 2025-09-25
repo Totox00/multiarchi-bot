@@ -1,11 +1,14 @@
-use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue};
+use serenity::all::{
+    AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
+};
 use sqlx::query;
 
 use crate::{
-    get_preclaims::resolve_preclaims,
+    autocomplete::Autocomplete,
+    commands::{get_preclaims::resolve_preclaims, Command},
     scrape::{fetch_tracker, scrape},
     util::SimpleReply,
-    Bot, Command,
+    Bot,
 };
 
 pub struct TrackWorldCommand {}
@@ -18,7 +21,7 @@ impl Command for TrackWorldCommand {
             .description("Tracks a new world")
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "tracker", "Link to or id of the tracker for this world").required(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the world").required(true).set_autocomplete(true))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -124,8 +127,17 @@ impl Command for TrackWorldCommand {
 
         if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
             let _ = claims_channel
-                .send_message(&ctx, CreateMessage::new().content("[TEST] New world available. Use `/claim` make your claims."))
+                .send_message(&ctx, CreateMessage::new().content(format!("[TEST] New world `{world_name}` available. Use `/claim` make your claims.")))
                 .await;
+        }
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "name", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
         }
     }
 }

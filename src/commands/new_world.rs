@@ -7,7 +7,7 @@ use serenity::all::{
 use sqlx::query;
 use tokio::{spawn, time::sleep};
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{commands::Command, util::SimpleReply, Bot};
 
 pub struct NewWorldCommand {}
 
@@ -18,7 +18,7 @@ impl Command for NewWorldCommand {
         CreateCommand::new(Self::NAME)
             .description("Creates a new world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the new world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the new world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls").required(true))
     }
@@ -37,7 +37,7 @@ impl Command for NewWorldCommand {
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
-                ("world-name", ResolvedValue::String(value)) => name = value,
+                ("name", ResolvedValue::String(value)) => name = value,
                 ("preclaim-end", ResolvedValue::Integer(value)) => preclaim_end = value,
                 ("slot-file", ResolvedValue::Attachment(value)) => slot_file = Some(value),
                 _ => (),

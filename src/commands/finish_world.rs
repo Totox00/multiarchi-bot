@@ -1,10 +1,11 @@
 use phf::phf_map;
 use serenity::all::{
-    CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
+    AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateMessage, EditInteractionResponse, ResolvedOption,
+    ResolvedValue,
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
 
 pub struct FinishWorldCommand {}
 
@@ -15,7 +16,7 @@ impl Command for FinishWorldCommand {
         CreateCommand::new(Self::NAME)
             .description("Awards points for a world and deletes it and all claims in it")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -170,6 +171,15 @@ impl Command for FinishWorldCommand {
         let _ = command
             .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("Successfully finished world {world}")))
             .await;
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
+        }
     }
 }
 

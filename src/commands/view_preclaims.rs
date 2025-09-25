@@ -7,8 +7,9 @@ use serenity::all::{
 use sqlx::query;
 
 use crate::{
+    commands::Command,
     util::{get_page, SimpleReply},
-    Bot, Command,
+    Bot,
 };
 
 struct World {

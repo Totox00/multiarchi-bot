@@ -1,7 +1,7 @@
-use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue};
+use serenity::all::{AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
 
 pub struct CancelPreclaimsCommand {}
 
@@ -12,7 +12,7 @@ impl Command for CancelPreclaimsCommand {
         CreateCommand::new(Self::NAME)
             .description("Cancels current preclaims for a world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -40,6 +40,15 @@ impl Command for CancelPreclaimsCommand {
             command.simple_reply(&ctx, format!("Cancelled preclaims for {world}")).await;
         } else {
             command.simple_reply(&ctx, "Failed to cancel preclaims").await;
+        }
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
         }
     }
 }

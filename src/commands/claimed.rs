@@ -1,7 +1,7 @@
 use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, EditInteractionResponse, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
-use crate::{scrape::Status, util::SimpleReply, Bot, Command};
+use crate::{commands::Command, scrape::Status, util::SimpleReply, Bot};
 
 pub struct ClaimedCommand {}
 

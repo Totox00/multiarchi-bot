@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue};
+use serenity::all::{AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
 
 pub struct ReschedulePreclaimsCommand {}
 
@@ -14,7 +14,7 @@ impl Command for ReschedulePreclaimsCommand {
         CreateCommand::new(Self::NAME)
             .description("Sets a new preclaim end for a world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
     }
 
@@ -56,5 +56,14 @@ impl Command for ReschedulePreclaimsCommand {
         }
 
         let _ = command.defer_ephemeral(&ctx.http).await;
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
+        }
     }
 }

@@ -1,9 +1,10 @@
 use serenity::all::{
-    CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter, EditInteractionResponse, ResolvedOption, ResolvedValue,
+    AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter, EditInteractionResponse, ResolvedOption,
+    ResolvedValue,
 };
 use sqlx::query;
 
-use crate::{scrape::Status, util::SimpleReply, Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, scrape::Status, util::SimpleReply, Bot};
 
 enum Sort {
     Sent,
@@ -28,9 +29,14 @@ impl Command for StatusReportCommand {
         CreateCommand::new(Self::NAME)
             .description("Gets a status report")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "sort", "How to sort the slot, allowed values are `sent` or `checks`, defaults to `sent`").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(false).set_autocomplete(true))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "sort", "How to sort the slot")
+                    .required(false)
+                    .add_string_choice("Last check sent", "sent")
+                    .add_string_choice("Checks done", "checks"),
+            )
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "page", "Report page to show, pages are 20 slots long and start at 1").required(false))
     }
 
@@ -219,6 +225,25 @@ impl Command for StatusReportCommand {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get slot info")).await;
         }
     }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_worlds(ctx, &interaction, value).await,
+            Some(AutocompleteOption { name: "slot", value, .. }) => {
+                let mut world = None;
+                for ResolvedOption { name: option_name, value, .. } in interaction.data.options() {
+                    if let ("world", ResolvedValue::String(value)) = (option_name, value) {
+                        world = Some(value)
+                    }
+                }
+
+                bot.autocomplete_slots(ctx, &interaction, value, world).await;
+            }
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
+        }
+    }
 }
 
 impl Sort {
@@ -240,7 +265,7 @@ async fn fetch_slot_response(bot: &Bot, sort: Sort, world: &str) -> Option<Vec<S
         .fetch_all(&bot.db)
         .await.ok()?.into_iter().map(|record| SlotResponse { id: record.id, name: record.name, status: record.status, checks: record.checks, checks_total: record.checks_total, last_activity: record.last_activity }).collect(),
         Sort::Checks => query!(
-            "SELECT id, name, status, checks, checks_total, last_activity FROM tracked_slots WHERE status < 3 AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) ORDER BY checks / checks_total DESC",
+            "SELECT id, name, status, checks, checks_total, last_activity FROM tracked_slots WHERE status < 3 AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) ORDER BY (CAST(checks AS REAL) / CAST(checks_total AS REAL)) ASC",
             world
         )
         .fetch_all(&bot.db)

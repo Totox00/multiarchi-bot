@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 
 use serenity::all::{
-    ButtonStyle, Colour, CommandInteraction, CommandOptionType, CommandType, ComponentInteraction, Context, CreateActionRow, CreateButton, CreateCommand, CreateCommandOption, CreateEmbed,
-    CreateInteractionResponse, CreateInteractionResponseMessage, ResolvedOption, ResolvedValue,
+    AutocompleteOption, ButtonStyle, Colour, CommandInteraction, CommandOptionType, CommandType, ComponentInteraction, Context, CreateActionRow, CreateButton, CreateCommand, CreateCommandOption,
+    CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage, ResolvedOption, ResolvedValue,
 };
 use sqlx::query;
 
 use crate::{
+    autocomplete::Autocomplete,
+    commands::Command,
     util::{get_page, SimpleReply},
-    Bot, Command,
+    Bot,
 };
 
 struct World {
@@ -32,7 +34,7 @@ impl Command for UnclaimedCommand {
         CreateCommand::new(Self::NAME)
             .description("View unclaimed slots")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(false).set_autocomplete(true))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -85,6 +87,15 @@ impl Command for UnclaimedCommand {
         let _ = command
             .create_response(&ctx.http, CreateInteractionResponse::Message(build_embed(world, slots, start_page, page_count)))
             .await;
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
+        }
     }
 }
 

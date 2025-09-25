@@ -5,12 +5,12 @@ use std::{
 
 use rand::{seq::SliceRandom, thread_rng};
 use serenity::{
-    all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue},
+    all::{AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, ResolvedOption, ResolvedValue},
     futures::future::join_all,
 };
 use sqlx::query;
 
-use crate::{util::SimpleReply, Bot, Command};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
 
 pub struct GetPreclaimsCommand {}
 
@@ -21,7 +21,7 @@ impl Command for GetPreclaimsCommand {
         CreateCommand::new(Self::NAME)
             .description("Gets preclaims for a world")
             .kind(CommandType::ChatInput)
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "world-name", "Name of the world").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -35,7 +35,7 @@ impl Command for GetPreclaimsCommand {
         let mut name = "";
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
-            if let ("world-name", ResolvedValue::String(value)) = (option_name, value) {
+            if let ("world", ResolvedValue::String(value)) = (option_name, value) {
                 name = value
             }
         }
@@ -88,6 +88,15 @@ impl Command for GetPreclaimsCommand {
                     ),
                 )
                 .await;
+        }
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "world", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
         }
     }
 }

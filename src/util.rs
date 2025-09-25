@@ -1,7 +1,7 @@
 use serenity::all::{CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse, CreateInteractionResponseMessage};
 
 pub trait SimpleReply {
-    async fn simple_reply<T: Into<String>>(&self, _ctx: &Context, _content: T) {}
+    async fn simple_reply<T: Into<String>>(&self, _ctx: &Context, _content: T);
 }
 
 impl SimpleReply for CommandInteraction {
