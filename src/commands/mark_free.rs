@@ -56,6 +56,7 @@ impl Command for MarkFreeCommand {
         .await
         .is_ok()
         {
+            bot.push_needed().await;
             let _ = command
                 .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("Successfully marked {slot} in {world} as a free claim")))
                 .await;

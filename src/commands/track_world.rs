@@ -123,6 +123,8 @@ impl Command for TrackWorldCommand {
             }
         }
 
+        bot.push_needed().await;
+
         let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Started tracking world")).await;
 
         if let Some(claims_channel) = Bot::claims_channel(&ctx).await {

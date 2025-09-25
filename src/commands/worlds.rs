@@ -46,7 +46,7 @@ impl Command for WorldsCommand {
                 }
             }
 
-            bot.push_to_sheet().await;
+            bot.push_needed().await;
         }
 
         let mut worlds = vec![];

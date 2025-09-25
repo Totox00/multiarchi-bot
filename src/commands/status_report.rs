@@ -72,6 +72,7 @@ impl Command for StatusReportCommand {
 
         if bot.admins.contains(&command.user.id) {
             bot.update_scrape(world).await;
+            bot.push_needed().await;
         }
 
         if let Some(slot) = slot {

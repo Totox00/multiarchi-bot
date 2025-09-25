@@ -7,7 +7,11 @@ mod commands;
 mod scrape;
 mod util;
 
-use std::env;
+use std::{
+    env,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use dotenvy::from_filename_override;
 use google_sheets4::{
@@ -21,7 +25,10 @@ use google_sheets4::{
 };
 use http_body_util::combinators::BoxBody;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use rustls::crypto::{aws_lc_rs, CryptoProvider};
+use rustls::{
+    crypto::{aws_lc_rs, CryptoProvider},
+    lock::Mutex,
+};
 use serde_json::json;
 use serenity::{
     all::{Context, EventHandler, GatewayIntents, Interaction, Ready, UserId},
@@ -32,13 +39,14 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
+use tokio::{spawn, time::interval};
 
 use crate::{
     commands::{interaction_create, register_all},
     scrape::Status,
 };
 
-const DEFAULT_CLAIMS: i64 = 1;
+const DEFAULT_CLAIMS: i64 = 2;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
 const SHEET_RANGE: &str = "autodata!A1:D";
 
@@ -46,6 +54,8 @@ struct Bot {
     db: SqlitePool,
     admins: Vec<UserId>,
     sheets: Sheets<HttpsConnector<HttpConnector>>,
+    latest_push: Arc<Mutex<u64>>,
+    pending_push: Arc<Mutex<bool>>,
 }
 
 struct Player {
@@ -76,7 +86,37 @@ impl Bot {
         }
     }
 
+    async fn push_needed(&self) {
+        if let Some(mut guard) = self.pending_push.lock() {
+            *guard = true;
+        } else {
+            println!("Failed to aquire pending push lock");
+            return;
+        }
+
+        self.push_to_sheet().await;
+    }
+
     async fn push_to_sheet(&self) {
+        if let (Some(mut latest_guard), Some(mut pending_guard)) = (self.latest_push.lock(), self.pending_push.lock()) {
+            if !*pending_guard {
+                return;
+            }
+
+            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+            let current_secs = current_time.as_secs();
+
+            if current_secs - *latest_guard < 60 {
+                return;
+            }
+            
+            *latest_guard = current_secs;
+            *pending_guard = false;
+        } else {
+            println!("Failed to aquire sheets locks");
+            return;
+        }
+
         let _ = self.sheets.spreadsheets().values_clear(ClearValuesRequest::default(), SHEET_ID, SHEET_RANGE).doit().await;
 
         let Ok(data) = query!("SELECT world, slot, status, free, player FROM sheets_push").fetch_all(&self.db).await else {
@@ -123,7 +163,7 @@ impl Bot {
 }
 
 #[async_trait]
-impl EventHandler for Bot {
+impl EventHandler for &Bot {
     async fn ready(&self, ctx: Context, _ready: Ready) {
         register_all(&ctx).await;
     }
@@ -180,7 +220,23 @@ async fn main() {
 
     let sheets = Sheets::new(client, auth);
 
-    let bot = Bot { db, admins, sheets };
+    let bot = Box::new(Bot {
+        db,
+        admins,
+        sheets,
+        latest_push: Arc::new(Mutex::new(0)),
+        pending_push: Arc::new(Mutex::new(false)),
+    });
+
+    let bot: &'static Bot = Box::leak(bot);
+
+    spawn(async {
+        let mut interval = interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            bot.push_to_sheet().await;
+        }
+    });
 
     let intents = GatewayIntents::empty();
     let mut client = DiscordClient::builder(&token, intents).event_handler(bot).await.expect("Error creating client");
