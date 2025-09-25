@@ -1,10 +1,11 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serenity::all::{
-    CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse,
-    ResolvedOption, ResolvedValue,
+    CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
+    EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
 use sqlx::query;
+use tokio::{spawn, time::sleep};
 
 use crate::{util::SimpleReply, Bot, Command};
 
@@ -49,8 +50,9 @@ impl Command for NewWorldCommand {
         }
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let current_secs = current_time.as_secs();
 
-        if current_time.as_secs() > preclaim_end as u64 {
+        if current_secs > preclaim_end as u64 {
             command.simple_reply(&ctx, "The specified preclaim end is in the past").await;
             return;
         }
@@ -106,6 +108,28 @@ impl Command for NewWorldCommand {
             let _ = command
                 .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("Successfully created world {name} with {slot_len} yamls")))
                 .await;
+
+            if let Some(preclaims_channel) = Bot::preclaims_channel(&ctx).await {
+                let _ = preclaims_channel
+                    .send_message(
+                        &ctx,
+                        CreateMessage::new().content(format!(
+                            "[TEST] {slot_len} slots available for preclaim in new world. Use `/view-preclaims` to view them and make preclaims."
+                        )),
+                    )
+                    .await;
+            }
+
+            let owned_name = name.to_owned();
+            spawn(async move {
+                sleep(Duration::from_secs(preclaim_end as u64 - current_secs)).await;
+
+                if let Some(system_channel) = Bot::system_channel(&ctx).await {
+                    let _ = system_channel
+                        .send_message(&ctx, CreateMessage::new().content(format!("[TEST] Preclaims are closed for {owned_name}.")))
+                        .await;
+                }
+            });
         } else {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to create new world")).await;
         }

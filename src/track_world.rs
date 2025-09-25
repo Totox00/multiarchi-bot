@@ -1,4 +1,4 @@
-use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, EditInteractionResponse, ResolvedOption, ResolvedValue};
+use serenity::all::{CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue};
 use sqlx::query;
 
 use crate::{
@@ -121,5 +121,11 @@ impl Command for TrackWorldCommand {
         }
 
         let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Started tracking world")).await;
+
+        if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
+            let _ = claims_channel
+                .send_message(&ctx, CreateMessage::new().content("[TEST] New world available. Use `/claim` make your claims."))
+                .await;
+        }
     }
 }

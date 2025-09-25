@@ -10,10 +10,10 @@ mod get_preclaims;
 mod mark_free;
 mod new_world;
 mod public;
-mod status_report;
 mod reschedule_preclaims;
 mod scrape;
 mod status;
+mod status_report;
 mod track_world;
 mod unclaim;
 mod unclaimed;
@@ -51,14 +51,16 @@ use view_preclaims::ViewPreclaimsCommand;
 
 use crate::{
     cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand,
-    mark_free::MarkFreeCommand, public::PublicCommand, status_report::StatusReportCommand, reschedule_preclaims::ReschedulePreclaimsCommand, scrape::Status, status::StatusCommand, track_world::TrackWorldCommand,
-    unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, worlds::WorldsCommand,
+    mark_free::MarkFreeCommand, public::PublicCommand, reschedule_preclaims::ReschedulePreclaimsCommand, scrape::Status, status::StatusCommand, status_report::StatusReportCommand,
+    track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, worlds::WorldsCommand,
 };
 
 const STATUS_GUILD: u64 = 903349199456841739;
 const STATUS_CHANNEL: u64 = 949331929872867348;
-const SYSTEM_GUILD: u64 = 1342189623757242439;
-const SYSTEM_CHANNEL: u64 = 1420513532247674901;
+const MULTIARCHI_GUILD: u64 = 903349199456841739; // 1342189623757242439;
+const SYSTEM_CHANNEL: u64 = 949331929872867348; // 1420513532247674901;
+const CLAIMS_CHANNEL: u64 = 949331929872867348; // 1342191337998516328;
+const PRECLAIMS_CHANNEL: u64 = 949331929872867348; // 1342191316318162967;
 const DEFAULT_CLAIMS: i64 = 1;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
 const SHEET_RANGE: &str = "autodata!A1:D";
@@ -111,9 +113,21 @@ impl Bot {
     }
 
     async fn system_channel(ctx: &Context) -> Option<GuildChannel> {
-        let guild = Guild::get(ctx, GuildId::new(SYSTEM_GUILD)).await.ok()?;
+        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
         let mut channels = guild.channels(&ctx.http).await.ok()?;
         channels.remove(&ChannelId::new(SYSTEM_CHANNEL))
+    }
+
+    async fn claims_channel(ctx: &Context) -> Option<GuildChannel> {
+        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
+        let mut channels = guild.channels(&ctx.http).await.ok()?;
+        channels.remove(&ChannelId::new(CLAIMS_CHANNEL))
+    }
+
+    async fn preclaims_channel(ctx: &Context) -> Option<GuildChannel> {
+        let guild = Guild::get(ctx, GuildId::new(MULTIARCHI_GUILD)).await.ok()?;
+        let mut channels = guild.channels(&ctx.http).await.ok()?;
+        channels.remove(&ChannelId::new(PRECLAIMS_CHANNEL))
     }
 
     async fn push_to_sheet(&self) {
