@@ -6,6 +6,7 @@ use crate::{Bot, Command};
 struct World {
     name: String,
     unclaimed: i64,
+    unstarted: i64,
     in_progress: i64,
     goal: i64,
     all_checks: i64,
@@ -37,7 +38,7 @@ impl Command for WorldsCommand {
             bot.push_to_sheet().await;
         }
 
-        if let Ok(response) = query_as!(World, "SELECT name, unclaimed, in_progress, goal, all_checks, done FROM worlds_overview ORDER BY id")
+        if let Ok(response) = query_as!(World, "SELECT name, unclaimed, unstarted, in_progress, goal, all_checks, done FROM worlds_overview ORDER BY id")
             .fetch_all(&bot.db)
             .await
         {
@@ -77,6 +78,10 @@ fn create_embed(chunk: &[World]) -> CreateEmbed {
 
         if world.unclaimed > 0 {
             entries.push(format!("Unclaimed: {}", world.unclaimed));
+        }
+
+        if world.unstarted > 0 {
+            entries.push(format!("Unstarted: {}", world.unstarted));
         }
 
         if world.in_progress > 0 {
