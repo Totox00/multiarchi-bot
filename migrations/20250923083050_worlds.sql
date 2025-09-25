@@ -10,3 +10,13 @@ CREATE VIEW worlds_overview (id, name, unclaimed, unstarted, in_progress, goal, 
   LEFT JOIN claims ON claims.slot = tracked_slots.id
   GROUP BY tracked_worlds.name
   ORDER BY tracked_worlds.id;
+
+CREATE VIEW preclaims_overview (id, name, slots, preclaims) AS
+  SELECT worlds.id, worlds.name,
+  COUNT(DISTINCT slots.id),
+  COUNT(preclaims.player)
+  FROM worlds INNER JOIN slots ON slots.world = worlds.id
+  LEFT JOIN preclaims ON preclaims.slot = slots.id
+  WHERE resolved_preclaims = 0
+  GROUP BY worlds.name
+  ORDER BY worlds.id;
