@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use rand::{seq::SliceRandom, thread_rng};
 use serenity::{
@@ -39,6 +42,18 @@ impl Command for GetPreclaimsCommand {
 
         if name.is_empty() {
             command.simple_reply(&ctx, "A world name is required").await;
+            return;
+        }
+
+        if let Ok(response) = query!("SELECT preclaim_end FROM worlds WHERE name = ? LIMIT 1", name).fetch_one(&bot.db).await {
+            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+
+            if current_time.as_secs() < response.preclaim_end as u64 {
+                command.simple_reply(&ctx, format!("Preclaims end at <t:{}:f>", response.preclaim_end)).await;
+                return;
+            }
+        } else {
+            command.simple_reply(&ctx, "Failed to get world").await;
             return;
         }
 
