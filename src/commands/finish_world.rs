@@ -168,6 +168,7 @@ impl Command for FinishWorldCommand {
             return;
         }
 
+        bot.push_needed().await;
         let _ = command
             .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("Successfully finished world {world}")))
             .await;
