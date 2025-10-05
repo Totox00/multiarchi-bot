@@ -48,7 +48,6 @@ use crate::{
 
 const DEFAULT_CLAIMS: i64 = 2;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
-const SHEET_RANGE: &str = "autodata!A1:D";
 
 struct Bot {
     db: SqlitePool,
@@ -109,7 +108,7 @@ impl Bot {
             if current_secs - *latest_guard < 60 {
                 return;
             }
-            
+
             *latest_guard = current_secs;
             *pending_guard = false;
         } else {
@@ -117,7 +116,7 @@ impl Bot {
             return;
         }
 
-        let _ = self.sheets.spreadsheets().values_clear(ClearValuesRequest::default(), SHEET_ID, SHEET_RANGE).doit().await;
+        let _ = self.sheets.spreadsheets().values_clear(ClearValuesRequest::default(), SHEET_ID, "autodata!A1:G").doit().await;
 
         let Ok(data) = query!("SELECT world, slot, status, free, player FROM sheets_push").fetch_all(&self.db).await else {
             return;
@@ -129,7 +128,7 @@ impl Bot {
             .values_update(
                 ValueRange {
                     major_dimension: Some(String::from("ROWS")),
-                    range: Some(String::from(SHEET_RANGE)),
+                    range: Some(String::from("autodata!A1:D")),
                     values: Some(
                         data.into_iter()
                             .filter_map(|record| {
@@ -154,7 +153,27 @@ impl Bot {
                     ),
                 },
                 SHEET_ID,
-                SHEET_RANGE,
+                "autodata!A1:D",
+            )
+            .value_input_option("RAW")
+            .doit()
+            .await;
+
+        let Ok(data) = query!("SELECT name, points FROM players ORDER BY id").fetch_all(&self.db).await else {
+            return;
+        };
+
+        let _ = self
+            .sheets
+            .spreadsheets()
+            .values_update(
+                ValueRange {
+                    major_dimension: Some(String::from("ROWS")),
+                    range: Some(String::from("autodata!F1:G")),
+                    values: Some(data.into_iter().map(|record| vec![json!(record.name), json!(record.points)]).collect()),
+                },
+                SHEET_ID,
+                "autodata!F1:G",
             )
             .value_input_option("RAW")
             .doit()

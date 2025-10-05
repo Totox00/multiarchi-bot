@@ -1,0 +1,1 @@
+ALTER TABLE tracked_slots ADD COLUMN points INT NOT NULL DEFAULT 0;

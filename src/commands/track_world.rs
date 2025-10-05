@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use phf::phf_map;
 use serenity::all::{
     AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
@@ -22,6 +25,7 @@ impl Command for TrackWorldCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "tracker", "Link to or id of the tracker for this world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the world").required(true).set_autocomplete(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "awards-points", "If this world awards points for multiarchi. Defaults to true").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -34,11 +38,13 @@ impl Command for TrackWorldCommand {
 
         let mut tracker = "";
         let mut world_name = "";
+        let mut awards_points = true;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("tracker", ResolvedValue::String(value)) => tracker = value,
                 ("name", ResolvedValue::String(value)) => world_name = value,
+                ("awards-points", ResolvedValue::Boolean(value)) => awards_points = value,
                 _ => (),
             }
         }
@@ -88,17 +94,19 @@ impl Command for TrackWorldCommand {
 
         resolve_preclaims(bot, world_name).await;
         for (slot, data) in data {
-            let game_str = data.games.join(", ");
+            let game_str = game_str(&data.games);
+            let points = if awards_points { calc_points(&data.games) } else { 0 };
             let status_i64 = data.status.as_i64();
             let slot_id = if let Ok(response) = query!(
-                "INSERT INTO tracked_slots (world, name, games, status, checks, checks_total, last_activity) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO tracked_slots (world, name, games, status, checks, checks_total, last_activity, points) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 world_id,
                 slot,
                 game_str,
                 status_i64,
                 data.checks,
                 data.checks_total,
-                data.last_activity
+                data.last_activity,
+                points
             )
             .fetch_one(&bot.db)
             .await
@@ -142,4 +150,25 @@ impl Command for TrackWorldCommand {
             }
         }
     }
+}
+
+const POINTS_OVERRIDE: phf::Map<&'static str, i64> = phf_map! {
+    "Clique" | "Autopelago" | "ArchipIDLE" | "Archipelago" | "APBingo" => 0,
+    "Keymaster's Keep" | "Stardew Valley" => 2
+};
+
+fn calc_points(games: &[String]) -> i64 {
+    1 + games.iter().map(|game| POINTS_OVERRIDE.get(game).copied().unwrap_or(1)).sum::<i64>()
+}
+
+fn game_str(games: &[String]) -> String {
+    let mut hash = HashMap::new();
+    for game in games {
+        hash.entry(game).and_modify(|count| *count += 1).or_insert(1);
+    }
+
+    hash.into_iter()
+        .map(|(game, count)| if count > 1 { format!("{game} x{count}") } else { game.clone() })
+        .collect::<Vec<_>>()
+        .join(", ")
 }

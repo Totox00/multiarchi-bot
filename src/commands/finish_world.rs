@@ -1,4 +1,3 @@
-use phf::phf_map;
 use serenity::all::{
     AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateMessage, EditInteractionResponse, ResolvedOption,
     ResolvedValue,
@@ -47,23 +46,20 @@ impl Command for FinishWorldCommand {
 
         let mut output = vec![];
 
-        if let Ok(slot_response) = query!("SELECT id, name, games FROM tracked_slots WHERE world in (SELECT id FROM tracked_worlds WHERE name = ?)", world)
+        if let Ok(slot_response) = query!("SELECT id, name, games, points FROM tracked_slots WHERE world in (SELECT id FROM tracked_worlds WHERE name = ?)", world)
             .fetch_all(&mut *transaction)
             .await
         {
             for record in slot_response {
-                let new_points = calc_points(&record.games);
                 if let Ok(response) = query!(
-                    "UPDATE players SET points = points + ? WHERE id IN (SELECT player FROM claims WHERE slot = ?) RETURNING snowflake, points",
-                    new_points,
+                    "UPDATE players SET points = points + ? WHERE id IN (SELECT player FROM claims WHERE slot = ?) RETURNING snowflake",
+                    record.points,
                     record.id
                 )
                 .fetch_optional(&mut *transaction)
                 .await
                 {
                     if let Some(response) = response {
-                        // handle change from new points
-
                         output.push((record.name, Some(response.snowflake)));
 
                         if query!("DELETE FROM claims WHERE slot = ?", record.id).execute(&mut *transaction).await.is_err() {
@@ -71,20 +67,14 @@ impl Command for FinishWorldCommand {
                             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete claim. Aborting")).await;
                             return;
                         }
-
-                        if query!("DELETE FROM tracked_slots WHERE id = ?", record.id).execute(&mut *transaction).await.is_err() {
-                            let _ = transaction.rollback().await;
-                            let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete slot. Aborting")).await;
-                            return;
-                        }
                     } else {
                         output.push((record.name, None));
+                    }
 
-                        if query!("DELETE FROM tracked_slots WHERE id = ?", record.id).execute(&mut *transaction).await.is_err() {
-                            let _ = transaction.rollback().await;
-                            let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete slot. Aborting")).await;
-                            return;
-                        }
+                    if query!("DELETE FROM tracked_slots WHERE id = ?", record.id).execute(&mut *transaction).await.is_err() {
+                        let _ = transaction.rollback().await;
+                        let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete slot. Aborting")).await;
+                        return;
                     }
                 } else {
                     let _ = transaction.rollback().await;
@@ -182,13 +172,4 @@ impl Command for FinishWorldCommand {
             }
         }
     }
-}
-
-const POINTS_OVERRIDE: phf::Map<&'static str, i64> = phf_map! {
-    "Clique" | "Autopelago" | "ArchipIDLE" | "Archipelago" | "APBingo" => 0,
-    "Keymaster's Keep" | "Stardew Valley" => 2
-};
-
-fn calc_points(games: &str) -> i64 {
-    1 + games.split(", ").map(|game| POINTS_OVERRIDE.get(game).copied().unwrap_or(1)).sum::<i64>()
 }
