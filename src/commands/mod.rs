@@ -1,3 +1,4 @@
+pub mod bulk_status;
 pub mod cancel_preclaims;
 pub mod claim;
 pub mod claimed;
@@ -19,9 +20,9 @@ pub mod worlds;
 use crate::{
     autocomplete::Autocomplete,
     commands::{
-        cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand,
-        mark_free::MarkFreeCommand, new_world::NewWorldCommand, public::PublicCommand, reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, status_report::StatusReportCommand,
-        track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
+        bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand,
+        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_world::NewWorldCommand, public::PublicCommand, reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand,
+        status_report::StatusReportCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
     },
 };
 use serenity::all::{Command as SerenityCommand, CommandInteraction, Context, CreateCommand, Interaction};
@@ -29,23 +30,33 @@ use serenity::all::{Command as SerenityCommand, CommandInteraction, Context, Cre
 use crate::Bot;
 
 pub async fn register_all(ctx: &Context) {
-    register::<ViewPreclaimsCommand>(ctx).await;
-    register::<NewWorldCommand>(ctx).await;
-    register::<GetPreclaimsCommand>(ctx).await;
-    register::<TrackWorldCommand>(ctx).await;
-    register::<ClaimCommand>(ctx).await;
-    register::<StatusCommand>(ctx).await;
-    register::<StatusReportCommand>(ctx).await;
-    register::<UnclaimCommand>(ctx).await;
-    register::<MarkFreeCommand>(ctx).await;
-    register::<PublicCommand>(ctx).await;
-    register::<UnclaimedCommand>(ctx).await;
-    register::<ClaimedCommand>(ctx).await;
-    register::<FinishWorldCommand>(ctx).await;
-    register::<ReschedulePreclaimsCommand>(ctx).await;
-    register::<CancelPreclaimsCommand>(ctx).await;
-    register::<WorldsCommand>(ctx).await;
-    register::<DoneCommand>(ctx).await;
+    if let Err(err) = SerenityCommand::set_global_commands(
+        &ctx.http,
+        vec![
+            ViewPreclaimsCommand::register(),
+            NewWorldCommand::register(),
+            GetPreclaimsCommand::register(),
+            TrackWorldCommand::register(),
+            ClaimCommand::register(),
+            StatusCommand::register(),
+            StatusReportCommand::register(),
+            UnclaimCommand::register(),
+            MarkFreeCommand::register(),
+            PublicCommand::register(),
+            UnclaimedCommand::register(),
+            ClaimedCommand::register(),
+            FinishWorldCommand::register(),
+            ReschedulePreclaimsCommand::register(),
+            CancelPreclaimsCommand::register(),
+            WorldsCommand::register(),
+            DoneCommand::register(),
+            BulkStatusCommand::register(),
+        ],
+    )
+    .await
+    {
+        println!("Failed to create command: {err}");
+    }
 }
 
 pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interaction) {
@@ -68,6 +79,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             CancelPreclaimsCommand::NAME => CancelPreclaimsCommand::execute(bot, ctx, command).await,
             WorldsCommand::NAME => WorldsCommand::execute(bot, ctx, command).await,
             DoneCommand::NAME => DoneCommand::execute(bot, ctx, command).await,
+            BulkStatusCommand::NAME => BulkStatusCommand::execute(bot, ctx, command).await,
             _ => (),
         },
         Interaction::Component(component) => {
@@ -95,15 +107,10 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             CancelPreclaimsCommand::NAME => CancelPreclaimsCommand::autocomplete(bot, ctx, interaction).await,
             WorldsCommand::NAME => WorldsCommand::autocomplete(bot, ctx, interaction).await,
             DoneCommand::NAME => DoneCommand::autocomplete(bot, ctx, interaction).await,
+            BulkStatusCommand::NAME => BulkStatusCommand::autocomplete(bot, ctx, interaction).await,
             _ => (),
         },
         _ => (),
-    }
-}
-
-async fn register<T: Command>(ctx: &Context) {
-    if let Err(err) = SerenityCommand::create_global_command(&ctx.http, T::register()).await {
-        println!("Failed to create {} command: {err}", T::NAME);
     }
 }
 
