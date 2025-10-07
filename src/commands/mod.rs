@@ -3,11 +3,13 @@ pub mod cancel_preclaims;
 pub mod claim;
 pub mod claimed;
 pub mod done;
+pub mod find;
 pub mod finish_world;
 pub mod get_preclaims;
 pub mod mark_free;
 pub mod new_world;
 pub mod public;
+pub mod register_commands;
 pub mod reschedule_preclaims;
 pub mod status;
 pub mod status_report;
@@ -20,17 +22,18 @@ pub mod worlds;
 use crate::{
     autocomplete::Autocomplete,
     commands::{
-        bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, finish_world::FinishWorldCommand,
-        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_world::NewWorldCommand, public::PublicCommand, reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand,
-        status_report::StatusReportCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
+        bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, find::FindCommand, finish_world::FinishWorldCommand,
+        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_world::NewWorldCommand, public::PublicCommand, register_commands::RegisterCommandsCommand,
+        reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, status_report::StatusReportCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
+        unclaimed::UnclaimedCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
     },
 };
 use serenity::all::{Command as SerenityCommand, CommandInteraction, Context, CreateCommand, Interaction};
 
 use crate::Bot;
 
-pub async fn register_all(ctx: &Context) {
-    if let Err(err) = SerenityCommand::set_global_commands(
+pub async fn register_all(ctx: &Context) -> Result<Vec<SerenityCommand>, serenity::Error> {
+    SerenityCommand::set_global_commands(
         &ctx.http,
         vec![
             ViewPreclaimsCommand::register(),
@@ -51,12 +54,11 @@ pub async fn register_all(ctx: &Context) {
             WorldsCommand::register(),
             DoneCommand::register(),
             BulkStatusCommand::register(),
+            FindCommand::register(),
+            RegisterCommandsCommand::register(),
         ],
     )
     .await
-    {
-        println!("Failed to create command: {err}");
-    }
 }
 
 pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interaction) {
@@ -80,6 +82,8 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             WorldsCommand::NAME => WorldsCommand::execute(bot, ctx, command).await,
             DoneCommand::NAME => DoneCommand::execute(bot, ctx, command).await,
             BulkStatusCommand::NAME => BulkStatusCommand::execute(bot, ctx, command).await,
+            FindCommand::NAME => FindCommand::execute(bot, ctx, command).await,
+            RegisterCommandsCommand::NAME => RegisterCommandsCommand::execute(bot, ctx, command).await,
             _ => (),
         },
         Interaction::Component(component) => {
@@ -108,6 +112,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             WorldsCommand::NAME => WorldsCommand::autocomplete(bot, ctx, interaction).await,
             DoneCommand::NAME => DoneCommand::autocomplete(bot, ctx, interaction).await,
             BulkStatusCommand::NAME => BulkStatusCommand::autocomplete(bot, ctx, interaction).await,
+            FindCommand::NAME => FindCommand::autocomplete(bot, ctx, interaction).await,
             _ => (),
         },
         _ => (),

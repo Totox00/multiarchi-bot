@@ -41,10 +41,7 @@ use sqlx::{
 };
 use tokio::{spawn, time::interval};
 
-use crate::{
-    commands::{interaction_create, register_all},
-    scrape::Status,
-};
+use crate::{commands::interaction_create, scrape::Status};
 
 const DEFAULT_CLAIMS: i64 = 2;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
@@ -183,9 +180,7 @@ impl Bot {
 
 #[async_trait]
 impl EventHandler for &Bot {
-    async fn ready(&self, ctx: Context, _ready: Ready) {
-        register_all(&ctx).await;
-    }
+    async fn ready(&self, _ctx: Context, _ready: Ready) {}
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         interaction_create(self, ctx, interaction).await;
