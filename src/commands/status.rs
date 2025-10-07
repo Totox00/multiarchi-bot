@@ -80,7 +80,11 @@ impl Command for StatusCommand {
                     }
                 }
 
-                bot.autocomplete_slots(ctx, &interaction, value, world).await;
+                if let Some(player) = bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await {
+                    bot.autocomplete_slots_claimed(ctx, &interaction, value, world, &player).await;
+                } else {
+                    bot.autocomplete_slots(ctx, &interaction, value, world).await;
+                }
             }
             Some(_) | None => {
                 interaction.no_autocomplete(&ctx).await;

@@ -1,7 +1,7 @@
 use serenity::all::{AutocompleteChoice, CommandInteraction, Context, CreateAutocompleteResponse, CreateInteractionResponse};
 use sqlx::query;
 
-use crate::Bot;
+use crate::{Bot, Player};
 
 pub trait Autocomplete {
     async fn no_autocomplete(&self, _ctx: &Context);
@@ -57,7 +57,6 @@ impl Bot {
         let filter = format!("%{partial}%");
 
         if let Some(world) = world {
-            let filter = format!("%{partial}%");
             let Ok(response) = query!(
                 "SELECT name FROM tracked_slots WHERE world IN (SELECT id FROM tracked_worlds WHERE name = ?) AND name LIKE ? ORDER BY name ASC LIMIT 25",
                 world,
@@ -77,6 +76,68 @@ impl Bot {
                 return;
             };
             interaction.autocomplete(&ctx, response.into_iter().map(|record| record.name)).await;
+        }
+    }
+
+    pub async fn autocomplete_slots_claimed(&self, ctx: Context, interaction: &CommandInteraction, partial: &str, world: Option<&str>, player: &Player) {
+        let filter = format!("%{partial}%");
+        let mut recommendations = vec![];
+
+        if let Some(world) = world {
+            if let Ok(response) = query!(
+                "SELECT name FROM tracked_slots LEFT JOIN claims ON claims.slot = tracked_slots.id WHERE claims.player = ? AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) AND name LIKE ? ORDER BY name ASC LIMIT 25",
+                player.id,
+                world,
+                filter
+            )
+            .fetch_all(&self.db)
+            .await {
+                recommendations.extend(response.into_iter().map(|record| record.name));
+            }
+
+            let remaining = 25 - recommendations.len() as i64;
+            if let Ok(response) = query!(
+                "SELECT name FROM tracked_slots LEFT JOIN claims ON claims.slot = tracked_slots.id WHERE (claims.player != ? OR claims.player IS NULL) AND world IN (SELECT id FROM tracked_worlds WHERE name = ?) AND name LIKE ? ORDER BY name ASC LIMIT ?",
+                player.id,
+                world,
+                filter,
+                remaining
+            )
+            .fetch_all(&self.db)
+            .await
+            {
+                recommendations.extend(response.into_iter().map(|record| record.name));
+            }
+        } else {
+            if let Ok(response) = query!(
+                "SELECT name FROM tracked_slots LEFT JOIN claims ON claims.slot = tracked_slots.id WHERE claims.player = ? AND name LIKE ? ORDER BY name ASC LIMIT 25",
+                player.id,
+                filter
+            )
+            .fetch_all(&self.db)
+            .await
+            {
+                recommendations.extend(response.into_iter().map(|record| record.name));
+            }
+
+            let remaining = 25 - recommendations.len() as i64;
+            if let Ok(response) = query!(
+                "SELECT name FROM tracked_slots LEFT JOIN claims ON claims.slot = tracked_slots.id WHERE (claims.player != ? OR claims.player IS NULL) AND name LIKE ? ORDER BY name ASC LIMIT ?",
+                player.id,
+                filter,
+                remaining
+            )
+            .fetch_all(&self.db)
+            .await
+            {
+                recommendations.extend(response.into_iter().map(|record| record.name));
+            }
+        }
+
+        if recommendations.is_empty() {
+            interaction.no_autocomplete(&ctx).await;
+        } else {
+            interaction.autocomplete(&ctx, recommendations.into_iter()).await;
         }
     }
 }
