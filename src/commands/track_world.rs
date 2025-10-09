@@ -149,7 +149,7 @@ impl Command for TrackWorldCommand {
 
         if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
             let _ = claims_channel
-                .send_message(&ctx, CreateMessage::new().content(format!("[TEST] New world `{world_name}` available. Use `/claim` make your claims.")))
+                .send_message(&ctx, CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")))
                 .await;
         }
     }

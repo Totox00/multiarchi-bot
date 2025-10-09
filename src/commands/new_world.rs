@@ -114,7 +114,7 @@ impl Command for NewWorldCommand {
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[TEST] {slot_len} slots available for preclaim in new world. Use `/view-preclaims` to view them and make preclaims."
+                            "[<@&1342190668231213176>] {slot_len} slots available for preclaim in new world. Use `/view-preclaims` to view them and make preclaims."
                         )),
                     )
                     .await;
@@ -126,7 +126,7 @@ impl Command for NewWorldCommand {
 
                 if let Some(system_channel) = Bot::system_channel(&ctx).await {
                     let _ = system_channel
-                        .send_message(&ctx, CreateMessage::new().content(format!("[TEST] Preclaims are closed for {owned_name}.")))
+                        .send_message(&ctx, CreateMessage::new().content(format!("[<@&1399971928076455946>] Preclaims are closed for {owned_name}.")))
                         .await;
                 }
             });
