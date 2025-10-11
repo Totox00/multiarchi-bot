@@ -33,7 +33,7 @@ impl Command for ClaimedCommand {
 
         let _ = command.defer_ephemeral(&ctx.http).await;
 
-        if let Ok(response) = query!("SELECT tracked_worlds.name AS world, tracked_slots.name AS slot, status, free FROM claims INNER JOIN tracked_slots ON claims.slot = tracked_slots.id INNER JOIN tracked_worlds ON tracked_slots.world = tracked_worlds.id WHERE player = ? LIMIT 20", player.id).fetch_all(&bot.db).await {
+        if let Ok(response) = query!("SELECT tracked_worlds.name AS world, tracked_slots.id AS slot_id, tracked_slots.name AS slot, status, free FROM claims INNER JOIN tracked_slots ON claims.slot = tracked_slots.id INNER JOIN tracked_worlds ON tracked_slots.world = tracked_worlds.id WHERE player = ? LIMIT 20", player.id).fetch_all(&bot.db).await {
             let fields = if response.is_empty() {
                 vec![(String::from("Overview"), format!("**Used claims**: 0/{}", player.claims), false)]
             } else {
@@ -41,6 +41,16 @@ impl Command for ClaimedCommand {
 
                 let mut game_fields = vec![];
                 for record in response {
+                    let status_msg = query!(
+                        "SELECT timestamp, description FROM updates WHERE slot = ? AND player = ? ORDER BY timestamp DESC LIMIT 1",
+                        record.slot_id,
+                        player.id
+                    )
+                    .fetch_one(&bot.db)
+                    .await
+                    .ok()
+                    .map(|response| (response.timestamp, response.description));
+
                     if record.free == 0 && record.status < 2 {
                         used_claims += 1;
                     }
@@ -48,7 +58,16 @@ impl Command for ClaimedCommand {
                     if let Some(status) = Status::from_i64(record.status) {
                         game_fields.push((
                             format!("**{}**: {}", record.world, record.slot),
-                            format!("**Status**: {}{}", status.as_str(), if record.free > 0 { "\n*Free claim*" } else { "" }),
+                            format!(
+                                "**Status**: {}{}{}",
+                                status.as_str(),
+                                if record.free > 0 { "\n*Free claim*" } else { "" },
+                                if let Some((timestamp, msg)) = status_msg {
+                                    format!("\n[<t:{timestamp}:f>] {msg}")
+                                } else {
+                                    String::new()
+                                }
+                            ),
                             false,
                         ));
                     }
