@@ -43,6 +43,9 @@ View slots claimed by a specific player.
 Mark a slot of yours as done.
 This command only needs to be used if you want to use your claim immediately, it will otherwise be marked as done automatically when tracker data is updated.
 
+## `/find <world> <slot>`
+Get the discord account of the claimant of a slot.
+
 ## `/public`
 View all public slots.
 
@@ -53,7 +56,8 @@ View all public slots in a world.
 Make one of your own slots public with a specific description.
 
 ## `/status <world> <slot> <update>`
-Make a status report for a specific slot.
+Make a status update for a specific slot.
+`/bulk-status` also exists, and can be used to make multiple status updates in one command.
 
 ## `/status-report <world>`
 View the status of all slots in a world and the latest update from each player in them.
@@ -68,6 +72,9 @@ View all unclaimed slots.
 
 ## `/unclaimed <world>`
 View all unclaimed slots in a specific world.
+
+## `/unpreclaim`
+Removes your current preclaim.
 
 ## `/view-preclaims`
 View all worlds accepting preclaims and make preclaims.
