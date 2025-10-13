@@ -44,6 +44,8 @@ impl Command for DoneCommand {
             return;
         };
 
+        let _ = command.defer_ephemeral(&ctx.http).await;
+
         if let Ok(response) = query!(
             "UPDATE tracked_slots SET status = 4 WHERE name = ? AND id IN (SELECT slot FROM claims WHERE player = ?) AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)",
             slot,
