@@ -25,6 +25,7 @@ impl Command for TrackWorldCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "tracker", "Link to or id of the tracker for this world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the world").required(true).set_autocomplete(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "import-claims", "If claims should be imported from a prior world").required(false))
             .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "awards-points", "If this world awards points for multiarchi. Defaults to true").required(false))
             .add_option(
                 CreateCommandOption::new(
@@ -46,6 +47,7 @@ impl Command for TrackWorldCommand {
 
         let mut tracker = "";
         let mut world_name = "";
+        let mut import_claims = "";
         let mut awards_points = true;
         let mut use_claims = true;
 
@@ -53,6 +55,7 @@ impl Command for TrackWorldCommand {
             match (option_name, value) {
                 ("tracker", ResolvedValue::String(value)) => tracker = value,
                 ("name", ResolvedValue::String(value)) => world_name = value,
+                ("import-claims", ResolvedValue::String(value)) => import_claims = value,
                 ("awards-points", ResolvedValue::Boolean(value)) => awards_points = value,
                 ("use-claims", ResolvedValue::Boolean(value)) => use_claims = value,
                 _ => (),
@@ -140,6 +143,17 @@ impl Command for TrackWorldCommand {
                 if query!("INSERT INTO claims (slot, player) VALUES (?, ?)", slot_id, response.player).execute(&bot.db).await.is_err() {
                     println!("Failed to transfer preclaim to claim for slot {slot} in world {world_id}");
                 }
+            } else if let Ok(response) = query!(
+                "SELECT player FROM claims WHERE slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world in (SELECT id FROM tracked_worlds WHERE name = ?)) LIMIT 1",
+                slot,
+                import_claims
+            )
+            .fetch_one(&bot.db)
+            .await
+            {
+                if query!("INSERT INTO claims (slot, player) VALUES (?, ?)", slot_id, response.player).execute(&bot.db).await.is_err() {
+                    println!("Failed to transfer claim for slot {slot} in world {world_id}");
+                }
             }
         }
 
@@ -149,7 +163,10 @@ impl Command for TrackWorldCommand {
 
         if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
             let _ = claims_channel
-                .send_message(&ctx, CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")))
+                .send_message(
+                    &ctx,
+                    CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")),
+                )
                 .await;
         }
     }
