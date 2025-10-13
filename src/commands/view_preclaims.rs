@@ -55,7 +55,7 @@ impl Command for ViewPreclaimsCommand {
 
         let page_count = worlds.iter().map(|world| if world.slots.len() <= 24 { 1 } else { world.slots.len().div_ceil(20) }).sum();
 
-        let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE player = ?", player.id)
+        let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE status = 0 AND player = ?", player.id)
             .fetch_one(&bot.db)
             .await
             .map(|record| record.name)
@@ -153,7 +153,7 @@ impl ViewPreclaimsCommand {
                     return;
                 };
 
-                let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE player = ?", player.id)
+                let current_preclaim = query!("SELECT name FROM slots INNER JOIN preclaims ON preclaims.slot = slots.id WHERE status = 0 AND player = ?", player.id)
                     .fetch_one(&bot.db)
                     .await
                     .map(|record| record.name)
