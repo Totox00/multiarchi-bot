@@ -106,6 +106,7 @@ impl Command for TrackWorldCommand {
         };
 
         let free = if use_claims { 0 } else { 1 };
+        let mut unclaimed_slots = false;
         resolve_preclaims(bot, world_name).await;
         for (slot, data) in data {
             let game_str = game_str(&data.games);
@@ -154,6 +155,8 @@ impl Command for TrackWorldCommand {
                 if query!("INSERT INTO claims (slot, player) VALUES (?, ?)", slot_id, response.player).execute(&bot.db).await.is_err() {
                     println!("Failed to transfer claim for slot {slot} in world {world_id}");
                 }
+            } else {
+                unclaimed_slots = true;
             }
         }
 
@@ -161,13 +164,15 @@ impl Command for TrackWorldCommand {
 
         let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Started tracking world")).await;
 
-        if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
-            let _ = claims_channel
-                .send_message(
-                    &ctx,
-                    CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")),
-                )
-                .await;
+        if unclaimed_slots {
+            if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
+                let _ = claims_channel
+                    .send_message(
+                        &ctx,
+                        CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")),
+                    )
+                    .await;
+            }
         }
     }
 
