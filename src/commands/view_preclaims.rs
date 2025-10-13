@@ -100,8 +100,8 @@ impl ViewPreclaimsCommand {
 
             if let Some(player) = bot.get_player(user_id, &interaction.user.name).await {
                 if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ?", player.id).fetch_optional(&bot.db).await {
-                    if response.is_some_and(|record| record.claims > 0) {
-                        interaction.simple_reply(&ctx, "Cannot preclaim with current claims").await;
+                    if response.is_some_and(|record| record.claims > player.claims) {
+                        interaction.simple_reply(&ctx, "Cannot preclaim without an available claim").await;
                         return;
                     }
                 } else {
