@@ -49,7 +49,7 @@ impl Command for UnclaimedCommand {
             }
         }
 
-        let worlds = Self::get_containers(bot).await;
+        let worlds = Self::get_containers(bot, ()).await;
 
         if worlds.is_empty() {
             command.simple_reply(&ctx, "There are no worlds with unclaimed slots").await;
@@ -81,7 +81,7 @@ impl Command for UnclaimedCommand {
             return;
         };
 
-        let _ = command.create_response(&ctx.http, CreateInteractionResponse::Message(response)).await;
+        let _ = command.create_response(&ctx.http, CreateInteractionResponse::Message(response.into())).await;
     }
 
     async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
@@ -95,7 +95,7 @@ impl Command for UnclaimedCommand {
 }
 
 impl Paginate<World, SlotId, Slot> for UnclaimedCommand {
-    async fn get_containers(bot: &Bot) -> Vec<World> {
+    async fn get_containers(bot: &Bot, _: ()) -> Vec<World> {
         if let Ok(response) = query!("SELECT tracked_worlds.id as world_id, tracked_worlds.name AS world_name, tracked_slots.id AS slot_id FROM tracked_worlds INNER JOIN tracked_slots ON tracked_worlds.id = tracked_slots.world WHERE tracked_slots.id NOT IN (SELECT slot FROM claims) ORDER BY tracked_slots.name").fetch_all(&bot.db).await {
             let mut worlds: HashMap<i64, (String, Vec<SlotId>)> = HashMap::new();
 

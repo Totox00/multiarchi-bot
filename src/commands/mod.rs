@@ -94,6 +94,8 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
                 ViewPreclaimsCommand::handle_interraction(bot, ctx, &component, rest).await;
             } else if let Some((_, rest)) = component.data.custom_id.split_once("unclaimed-") {
                 UnclaimedCommand::handle_interraction(bot, ctx, &component, rest).await;
+            } else if let Some((_, rest)) = component.data.custom_id.split_once("status-report-") {
+                StatusReportCommand::handle_interraction(bot, ctx, &component, rest).await;
             }
         }
         Interaction::Autocomplete(interaction) => match interaction.data.name.as_str() {

@@ -51,14 +51,14 @@ impl Command for ViewPreclaimsCommand {
             return;
         };
 
-        let _ = command.create_response(&ctx.http, CreateInteractionResponse::Message(response)).await;
+        let _ = command.create_response(&ctx.http, CreateInteractionResponse::Message(response.into())).await;
     }
 }
 
 impl Paginate<World, SlotId, Slot, &Player> for ViewPreclaimsCommand {
     const PAGE_SIZE: usize = 24;
 
-    async fn get_containers(bot: &Bot) -> Vec<World> {
+    async fn get_containers(bot: &Bot, _: &Player) -> Vec<World> {
         if let Ok(response) = query!("SELECT worlds.name AS world_name, preclaim_end, slots.id AS slot_id FROM worlds INNER JOIN slots ON worlds.id = slots.world WHERE preclaim_end > strftime('%s', 'now') ORDER BY slots.name").fetch_all(&bot.db).await {
             let mut worlds: HashMap<String, (i64, Vec<SlotId>)> = HashMap::new();
 
