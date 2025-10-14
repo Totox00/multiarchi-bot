@@ -4,6 +4,7 @@
 mod autocomplete;
 mod channels;
 mod commands;
+mod paginate;
 mod scrape;
 mod util;
 

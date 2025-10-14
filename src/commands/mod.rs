@@ -122,7 +122,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
     }
 }
 
-trait Command {
+pub trait Command {
     const NAME: &'static str;
 
     fn register() -> CreateCommand;
