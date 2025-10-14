@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use serenity::all::{
     AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
@@ -16,56 +18,88 @@ impl Command for BulkStatusCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world1", "Name of the world").required(true).set_autocomplete(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot1", "Name of the slot").required(true).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description1", "Status description").required(true))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description1", "Status description")
+                    .required(true)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world2", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot2", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description2", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description2", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world3", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot3", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description3", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description3", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world4", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot4", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description4", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description4", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world5", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot5", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description5", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description5", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world6", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot6", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description6", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description6", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world7", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot7", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description7", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description7", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(
                 CreateCommandOption::new(CommandOptionType::String, "world8", "Name of the world")
                     .required(false)
                     .set_autocomplete(true),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot8", "Name of the slot").required(false).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description8", "Status description").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description8", "Status description")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -170,6 +204,35 @@ impl Command for BulkStatusCommand {
                     } else {
                         bot.autocomplete_slots(ctx, &interaction, value, world).await;
                     }
+                } else if let ("description", description_i_str) = name.split_at(11) {
+                    if let Ok(description_i) = description_i_str.parse::<u8>() {
+                        let mut world = None;
+                        let mut slot = None;
+                        let mut world_i = 0;
+                        for ResolvedOption { name, value, .. } in interaction.data.options() {
+                            if let (name, ResolvedValue::String(value)) = (name, value) {
+                                if name.starts_with("slot") && name.ends_with(description_i_str) {
+                                    slot = Some(value);
+                                }
+                                if let ("world", i) = name.split_at(5) {
+                                    if let Ok(i) = i.parse::<u8>() {
+                                        if description_i >= i && world_i < i {
+                                            world = Some(value);
+                                            world_i = i;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
+                            if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world).fetch_one(&bot.db).await {
+                                let _ = interaction.autocomplete(&ctx, once(response.description)).await;
+                                return;
+                            }
+                        }
+                    }
+                    interaction.no_autocomplete(&ctx).await;
                 } else {
                     interaction.no_autocomplete(&ctx).await;
                 }

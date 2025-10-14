@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use serenity::all::{
     AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
@@ -16,7 +18,11 @@ impl Command for StatusCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "world", "Name of the world").required(true).set_autocomplete(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "slot", "Name of the slot").required(true).set_autocomplete(true))
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "description", "Status description").required(true))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "description", "Status description")
+                    .required(true)
+                    .set_autocomplete(true),
+            )
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -85,6 +91,29 @@ impl Command for StatusCommand {
                 } else {
                     bot.autocomplete_slots(ctx, &interaction, value, world).await;
                 }
+            }
+            Some(AutocompleteOption { name: "description", .. }) => {
+                let mut world = None;
+                let mut slot = None;
+
+                for ResolvedOption { name: option_name, value, .. } in interaction.data.options() {
+                    match (option_name, value) {
+                        ("world", ResolvedValue::String(value)) => world = Some(value),
+                        ("slot", ResolvedValue::String(value)) => slot = Some(value),
+                        _ => (),
+                    }
+                }
+
+                if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
+                    if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world)
+                        .fetch_one(&bot.db)
+                        .await
+                    {
+                        let _ = interaction.autocomplete(&ctx, once(response.description)).await;
+                        return;
+                    }
+                }
+                interaction.no_autocomplete(&ctx).await;
             }
             Some(_) | None => {
                 interaction.no_autocomplete(&ctx).await;
