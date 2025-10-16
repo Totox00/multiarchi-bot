@@ -21,6 +21,7 @@ impl Command for NewWorldCommand {
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the new world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "message", "Additional message to display").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -34,12 +35,15 @@ impl Command for NewWorldCommand {
         let mut name = "";
         let mut preclaim_end = 0;
         let mut slot_file = None;
+        let mut message = None;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("name", ResolvedValue::String(value)) => name = value,
                 ("preclaim-end", ResolvedValue::Integer(value)) => preclaim_end = value,
                 ("slot-file", ResolvedValue::Attachment(value)) => slot_file = Some(value),
+                ("message", ResolvedValue::String(value)) => message = Some(value),
+
                 _ => (),
             }
         }
@@ -114,7 +118,8 @@ impl Command for NewWorldCommand {
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[<@&1342190668231213176>] {slot_len} slots available for preclaim in new world until <t:{preclaim_end}:f>. Use `/view-preclaims` to view them and make preclaims."
+                            "[<@&1342190668231213176>] {slot_len} slots available for preclaim in new world until <t:{preclaim_end}:f>. Use `/view-preclaims` to view them and make preclaims.{}",
+                            if let Some(message) = message { format!(" {message}") } else { String::new() }
                         )),
                     )
                     .await;

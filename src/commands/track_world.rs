@@ -35,6 +35,7 @@ impl Command for TrackWorldCommand {
                 )
                 .required(false),
             )
+            .add_option(CreateCommandOption::new(CommandOptionType::String, "message", "Additional message to display").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -50,6 +51,7 @@ impl Command for TrackWorldCommand {
         let mut import_claims = "";
         let mut awards_points = true;
         let mut use_claims = true;
+        let mut message = None;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
@@ -58,6 +60,7 @@ impl Command for TrackWorldCommand {
                 ("import-claims", ResolvedValue::String(value)) => import_claims = value,
                 ("awards-points", ResolvedValue::Boolean(value)) => awards_points = value,
                 ("use-claims", ResolvedValue::Boolean(value)) => use_claims = value,
+                ("message", ResolvedValue::String(value)) => message = Some(value),
                 _ => (),
             }
         }
@@ -169,7 +172,10 @@ impl Command for TrackWorldCommand {
                 let _ = claims_channel
                     .send_message(
                         &ctx,
-                        CreateMessage::new().content(format!("[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.")),
+                        CreateMessage::new().content(format!(
+                            "[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.{}",
+                            if let Some(message) = message { format!(" {message}") } else { String::new() }
+                        )),
                     )
                     .await;
             }
