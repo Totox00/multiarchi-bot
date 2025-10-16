@@ -7,6 +7,7 @@ pub mod find;
 pub mod finish_world;
 pub mod get_preclaims;
 pub mod mark_free;
+pub mod new_reality;
 pub mod new_world;
 pub mod public;
 pub mod register_commands;
@@ -24,7 +25,7 @@ use crate::{
     autocomplete::Autocomplete,
     commands::{
         bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, find::FindCommand, finish_world::FinishWorldCommand,
-        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_world::NewWorldCommand, public::PublicCommand, register_commands::RegisterCommandsCommand,
+        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_reality::NewRealityCommand, new_world::NewWorldCommand, public::PublicCommand, register_commands::RegisterCommandsCommand,
         reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, status_report::StatusReportCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
         unclaimed::UnclaimedCommand, unpreclaim::UnpreclaimCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
     },
@@ -58,6 +59,7 @@ pub async fn register_all(ctx: &Context) -> Result<Vec<SerenityCommand>, serenit
             FindCommand::register(),
             RegisterCommandsCommand::register(),
             UnpreclaimCommand::register(),
+            NewRealityCommand::register(),
         ],
     )
     .await
@@ -87,6 +89,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             FindCommand::NAME => FindCommand::execute(bot, ctx, command).await,
             RegisterCommandsCommand::NAME => RegisterCommandsCommand::execute(bot, ctx, command).await,
             UnpreclaimCommand::NAME => UnpreclaimCommand::execute(bot, ctx, command).await,
+            NewRealityCommand::NAME => NewRealityCommand::execute(bot, ctx, command).await,
             _ => (),
         },
         Interaction::Component(component) => {
@@ -118,6 +121,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             DoneCommand::NAME => DoneCommand::autocomplete(bot, ctx, interaction).await,
             BulkStatusCommand::NAME => BulkStatusCommand::autocomplete(bot, ctx, interaction).await,
             FindCommand::NAME => FindCommand::autocomplete(bot, ctx, interaction).await,
+            NewRealityCommand::NAME => NewRealityCommand::autocomplete(bot, ctx, interaction).await,
             _ => (),
         },
         _ => (),

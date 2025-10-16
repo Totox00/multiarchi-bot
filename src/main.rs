@@ -44,7 +44,8 @@ use tokio::{spawn, time::interval};
 
 use crate::{commands::interaction_create, scrape::Status};
 
-const DEFAULT_CLAIMS: i64 = 2;
+const MAX_REALITIES: usize = 2;
+const NO_REALITY_CLAIMS: i64 = 2;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
 
 struct Bot {
@@ -58,29 +59,119 @@ struct Bot {
 struct Player {
     pub id: i64,
     pub name: String,
-    pub claims: i64,
     pub points: i64,
+}
+
+#[derive(Clone, Copy)]
+struct Reality {
+    pub id: i64,
+    pub max_claims: i64,
 }
 
 impl Bot {
     async fn get_player(&self, snowflake: i64, name: &str) -> Option<Player> {
-        if let Ok(response) = query_as!(Player, "SELECT id, name, claims, points FROM players WHERE snowflake = ? LIMIT 1", snowflake)
+        if let Ok(response) = query_as!(Player, "SELECT id, name, points FROM players WHERE snowflake = ? LIMIT 1", snowflake)
             .fetch_one(&self.db)
             .await
         {
             Some(response)
         } else {
-            let response = query!("INSERT INTO players (snowflake, name, claims) VALUES (?, ?, ?) RETURNING id, points", snowflake, name, DEFAULT_CLAIMS)
+            let response = query!("INSERT INTO players (snowflake, name) VALUES (?, ?) RETURNING id, points", snowflake, name)
                 .fetch_one(&self.db)
                 .await
                 .ok()?;
             Some(Player {
                 id: response.id,
                 name: name.to_owned(),
-                claims: DEFAULT_CLAIMS,
                 points: response.points,
             })
         }
+    }
+
+    async fn can_claim_slot(&self, player: &Player, slot: i64) -> Result<(), &'static str> {
+        if let Ok(response) = query!(
+            "SELECT realities.id, realities.max_claims FROM tracked_slots LEFT JOIN tracked_worlds ON tracked_worlds.id = tracked_slots.world LEFT JOIN realities ON realities.id = tracked_worlds.reality WHERE tracked_slots.id = ?",
+            slot
+        )
+        .fetch_optional(&self.db)
+        .await
+        {
+            self.can_claim_in_reality(
+                player,
+                response.map(|record| Reality {
+                    id: record.id,
+                    max_claims: record.max_claims.unwrap_or(NO_REALITY_CLAIMS),
+                }),
+            )
+            .await
+        } else {
+            Err("Failed to get reality")
+        }
+    }
+
+    async fn can_preclaim_slot(&self, player: &Player, slot: i64) -> Result<(), &'static str> {
+        if let Ok(response) = query!(
+            "SELECT realities.id, realities.max_claims FROM slots LEFT JOIN worlds ON worlds.id = slots.world LEFT JOIN realities ON realities.id = worlds.reality WHERE slots.id = ?",
+            slot
+        )
+        .fetch_optional(&self.db)
+        .await
+        {
+            self.can_claim_in_reality(
+                player,
+                response.map(|record| Reality {
+                    id: record.id,
+                    max_claims: record.max_claims.unwrap_or(NO_REALITY_CLAIMS),
+                }),
+            )
+            .await
+        } else {
+            Err("Failed to get reality")
+        }
+    }
+
+    async fn can_claim_in_reality(&self, player: &Player, reality: Option<Reality>) -> Result<(), &'static str> {
+        let (max_claims, current_claims) = if let Some(reality) = reality {
+            let realities: Vec<_> = if let Ok(response) = query!("SELECT reality FROM current_realities WHERE player = ?", player.id).fetch_all(&self.db).await {
+                response.into_iter().filter_map(|record| record.reality).collect()
+            } else {
+                return Err("Failed to get current realities");
+            };
+
+            if !realities.contains(&reality.id) && realities.len() >= MAX_REALITIES {
+                return Err("You cannot join more realities");
+            }
+
+            (
+                reality.max_claims,
+                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality = ?", player.id, reality.id)
+                    .fetch_optional(&self.db)
+                    .await
+                {
+                    response.map(|record| record.claims).unwrap_or(0)
+                } else {
+                    return Err("Failed to get current claims");
+                },
+            )
+        } else {
+            (
+                NO_REALITY_CLAIMS,
+                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality IS NULL", player.id)
+                    .fetch_optional(&self.db)
+                    .await
+                {
+                    response.map(|record| record.claims).unwrap_or(0)
+                } else {
+                    return Err("Failed to get current claims");
+                },
+            )
+        };
+
+        if current_claims >= max_claims {
+            return Err("No available claim");
+        }
+
+        Ok(())
     }
 
     async fn push_needed(&self) {

@@ -17,6 +17,7 @@ use crate::{
 struct World {
     id: i64,
     name: String,
+    reality: Option<String>,
     slots: Vec<SlotId>,
 }
 
@@ -96,17 +97,17 @@ impl Command for UnclaimedCommand {
 
 impl Paginate<World, SlotId, Slot> for UnclaimedCommand {
     async fn get_containers(bot: &Bot, _: ()) -> Vec<World> {
-        if let Ok(response) = query!("SELECT tracked_worlds.id as world_id, tracked_worlds.name AS world_name, tracked_slots.id AS slot_id FROM tracked_worlds INNER JOIN tracked_slots ON tracked_worlds.id = tracked_slots.world WHERE tracked_slots.id NOT IN (SELECT slot FROM claims) ORDER BY tracked_slots.name").fetch_all(&bot.db).await {
-            let mut worlds: HashMap<i64, (String, Vec<SlotId>)> = HashMap::new();
+        if let Ok(response) = query!("SELECT tracked_worlds.id as world_id, tracked_worlds.name AS world_name, realities.name AS reality, tracked_slots.id AS slot_id FROM tracked_worlds INNER JOIN tracked_slots ON tracked_worlds.id = tracked_slots.world LEFT JOIN realities ON tracked_worlds.reality = realities.id WHERE tracked_slots.id NOT IN (SELECT slot FROM claims) ORDER BY tracked_slots.name").fetch_all(&bot.db).await {
+            let mut worlds: HashMap<i64, (String, Option<String>, Vec<SlotId>)> = HashMap::new();
 
             for record in response {
                 worlds
                     .entry(record.world_id)
-                    .and_modify(|(_, vec)| vec.push(SlotId(record.slot_id)))
-                    .or_insert((record.world_name, vec![SlotId(record.slot_id)]));
+                    .and_modify(|(_, _, vec)| vec.push(SlotId(record.slot_id)))
+                    .or_insert((record.world_name, record.reality, vec![SlotId(record.slot_id)]));
             }
 
-            let mut worlds_vec: Vec<_> = worlds.into_iter().map(|(id, (name, slots))| World { id, name, slots }).collect();
+            let mut worlds_vec: Vec<_> = worlds.into_iter().map(|(id, (name, reality, slots))| World { id, name, reality, slots }).collect();
             worlds_vec.sort_by_key(|world| world.id);
             worlds_vec
         } else {
@@ -121,7 +122,9 @@ impl PageContainer<SlotId, Slot> for World {
     }
 
     fn page_setup(&self) -> CreateEmbed {
-        CreateEmbed::new().title(&self.name).colour(Colour::DARK_PURPLE)
+        CreateEmbed::new()
+            .title(format!("{}{}", self.name, if let Some(reality) = &self.reality { format!(" [{reality}]") } else { String::new() }))
+            .colour(Colour::DARK_PURPLE)
     }
 }
 

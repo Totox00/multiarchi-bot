@@ -35,10 +35,9 @@ impl Command for ClaimedCommand {
 
         if let Ok(response) = query!("SELECT tracked_worlds.name AS world, tracked_slots.id AS slot_id, tracked_slots.name AS slot, status, free FROM claims INNER JOIN tracked_slots ON claims.slot = tracked_slots.id INNER JOIN tracked_worlds ON tracked_slots.world = tracked_worlds.id WHERE player = ? LIMIT 20", player.id).fetch_all(&bot.db).await {
             let fields = if response.is_empty() {
-                vec![(String::from("Overview"), format!("**Used claims**: 0/{}", player.claims), false)]
+                let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Player has no claimed slots")).await;
+                return;
             } else {
-                let mut used_claims = 0;
-
                 let mut game_fields = vec![];
                 for record in response {
                     let status_msg = query!(
@@ -50,10 +49,6 @@ impl Command for ClaimedCommand {
                     .await
                     .ok()
                     .map(|response| (response.timestamp, response.description));
-
-                    if record.free == 0 && record.status < 2 {
-                        used_claims += 1;
-                    }
 
                     if let Some(status) = Status::from_i64(record.status) {
                         game_fields.push((
@@ -73,10 +68,7 @@ impl Command for ClaimedCommand {
                     }
                 }
 
-                let mut fields = vec![(String::from("Overview"), format!("**Used claims**: {}/{}", used_claims, player.claims), false)];
-                fields.extend(game_fields);
-
-                fields
+                game_fields
             };
 
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().embed(CreateEmbed::new().fields(fields))).await;

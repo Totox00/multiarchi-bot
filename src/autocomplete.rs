@@ -43,6 +43,16 @@ impl Bot {
         interaction.autocomplete(&ctx, response.into_iter().map(|record| record.name)).await;
     }
 
+    pub async fn autocomplete_realities(&self, ctx: Context, interaction: &CommandInteraction, partial: &str) {
+        let filter = format!("%{partial}%");
+        let Ok(response) = query!("SELECT name FROM realities WHERE name LIKE ? ORDER BY name ASC LIMIT 25", filter).fetch_all(&self.db).await else {
+            interaction.no_autocomplete(&ctx).await;
+            return;
+        };
+
+        interaction.autocomplete(&ctx, response.into_iter().map(|record| record.name)).await;
+    }
+
     pub async fn autocomplete_worlds(&self, ctx: Context, interaction: &CommandInteraction, partial: &str) {
         let filter = format!("%{partial}%");
         let Ok(response) = query!("SELECT name FROM tracked_worlds WHERE name LIKE ? ORDER BY name ASC LIMIT 25", filter).fetch_all(&self.db).await else {

@@ -25,6 +25,11 @@ impl Command for TrackWorldCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "tracker", "Link to or id of the tracker for this world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the world").required(true).set_autocomplete(true))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "reality", "Name of the reality")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "import-claims", "If claims should be imported from a prior world").required(false))
             .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "awards-points", "If this world awards points for multiarchi. Defaults to true").required(false))
             .add_option(
@@ -48,6 +53,7 @@ impl Command for TrackWorldCommand {
 
         let mut tracker = "";
         let mut world_name = "";
+        let mut reality_name = None;
         let mut import_claims = "";
         let mut awards_points = true;
         let mut use_claims = true;
@@ -57,6 +63,7 @@ impl Command for TrackWorldCommand {
             match (option_name, value) {
                 ("tracker", ResolvedValue::String(value)) => tracker = value,
                 ("name", ResolvedValue::String(value)) => world_name = value,
+                ("reality", ResolvedValue::String(value)) => reality_name = Some(value),
                 ("import-claims", ResolvedValue::String(value)) => import_claims = value,
                 ("awards-points", ResolvedValue::Boolean(value)) => awards_points = value,
                 ("use-claims", ResolvedValue::Boolean(value)) => use_claims = value,
@@ -75,6 +82,17 @@ impl Command for TrackWorldCommand {
             return;
         }
 
+        let reality = if let Some(reality_name) = reality_name {
+            if let Ok(response) = query!("SELECT id FROM realities WHERE name = ? LIMIT 1", reality_name).fetch_one(&bot.db).await {
+                Some(response.id)
+            } else {
+                command.simple_reply(&ctx, "Failed to get reality").await;
+                return;
+            }
+        } else {
+            None
+        };
+        
         let _ = command.defer_ephemeral(&ctx.http).await;
 
         let tracker_id = if let Some(id) = tracker.split('/').next_back() {
@@ -98,7 +116,7 @@ impl Command for TrackWorldCommand {
             return;
         };
 
-        let world_id = if let Ok(response) = query!("INSERT INTO tracked_worlds (tracker_id, name) VALUES (?, ?) RETURNING id", tracker_id, world_name)
+        let world_id = if let Ok(response) = query!("INSERT INTO tracked_worlds (tracker_id, name, reality) VALUES (?, ?, ?) RETURNING id", tracker_id, world_name, reality)
             .fetch_one(&bot.db)
             .await
         {
@@ -173,7 +191,8 @@ impl Command for TrackWorldCommand {
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[<@&1342191138056175707>] New world `{world_name}` available. Use `/claim` make your claims.{}",
+                            "[<@&1342191138056175707>] New world `{world_name}` available{}. Use `/claim` make your claims.{}",
+                            if let Some(reality_name) = reality_name { format!(" in {reality_name}") } else { String::new() },
                             if let Some(message) = message { format!(" {message}") } else { String::new() }
                         )),
                     )
@@ -185,6 +204,7 @@ impl Command for TrackWorldCommand {
     async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
         match interaction.data.autocomplete() {
             Some(AutocompleteOption { name: "name", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
+            Some(AutocompleteOption { name: "reality", value, .. }) => bot.autocomplete_realities(ctx, &interaction, value).await,
             Some(_) | None => {
                 interaction.no_autocomplete(&ctx).await;
             }

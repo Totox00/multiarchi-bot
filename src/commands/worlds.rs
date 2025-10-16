@@ -10,6 +10,7 @@ enum World {
 
 struct TrackedWorld {
     name: String,
+    reality: Option<String>,
     unclaimed: i64,
     unstarted: i64,
     in_progress: i64,
@@ -20,6 +21,7 @@ struct TrackedWorld {
 
 struct PreclaimWorld {
     name: String,
+    reality: Option<String>,
     slots: i64,
     preclaims: i64,
 }
@@ -51,15 +53,21 @@ impl Command for WorldsCommand {
 
         let mut worlds = vec![];
 
-        if let Ok(response) = query_as!(PreclaimWorld, "SELECT name, slots, preclaims FROM preclaims_overview ORDER BY id").fetch_all(&bot.db).await {
+        if let Ok(response) = query_as!(PreclaimWorld, "SELECT name, reality, slots, preclaims FROM preclaims_overview ORDER BY id")
+            .fetch_all(&bot.db)
+            .await
+        {
             worlds.extend(response.into_iter().map(World::from));
         } else {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get preclaims overview")).await;
         }
 
-        if let Ok(response) = query_as!(TrackedWorld, "SELECT name, unclaimed, unstarted, in_progress, goal, all_checks, done FROM worlds_overview ORDER BY id")
-            .fetch_all(&bot.db)
-            .await
+        if let Ok(response) = query_as!(
+            TrackedWorld,
+            "SELECT name, reality, unclaimed, unstarted, in_progress, goal, all_checks, done FROM worlds_overview ORDER BY id"
+        )
+        .fetch_all(&bot.db)
+        .await
         {
             worlds.extend(response.into_iter().map(World::from));
         } else {
@@ -98,19 +106,25 @@ fn create_embed(chunk: &[World]) -> CreateEmbed {
 }
 
 impl From<PreclaimWorld> for World {
-    fn from(value: PreclaimWorld) -> Self {
+    fn from(mut value: PreclaimWorld) -> Self {
+        if value.reality.as_ref().is_some_and(|reality| reality.is_empty()) {
+            value.reality = None;
+        }
         Self::Preclaim(value)
     }
 }
 
 impl From<TrackedWorld> for World {
-    fn from(value: TrackedWorld) -> Self {
+    fn from(mut value: TrackedWorld) -> Self {
+        if value.reality.as_ref().is_some_and(|reality| reality.is_empty()) {
+            value.reality = None;
+        }
         Self::Tracked(value)
     }
 }
 
 impl World {
-    fn field(&self) -> (&str, String, bool) {
+    fn field(&self) -> (String, String, bool) {
         match self {
             World::Tracked(tracked_world) => {
                 let mut entries = vec![];
@@ -139,7 +153,15 @@ impl World {
                     entries.push(format!("Done: {}", tracked_world.done));
                 }
 
-                (&tracked_world.name, entries.join("\n"), false)
+                (
+                    format!(
+                        "{}{}",
+                        tracked_world.name,
+                        if let Some(reality) = &tracked_world.reality { format!(" [{reality}]") } else { String::new() }
+                    ),
+                    entries.join("\n"),
+                    false,
+                )
             }
             World::Preclaim(preclaim_world) => {
                 let mut entries = vec![];
@@ -152,7 +174,15 @@ impl World {
                     entries.push(format!("Preclaims: {}", preclaim_world.preclaims));
                 }
 
-                (&preclaim_world.name, entries.join("\n"), false)
+                (
+                    format!(
+                        "{}{}",
+                        preclaim_world.name,
+                        if let Some(reality) = &preclaim_world.reality { format!(" [{reality}]") } else { String::new() }
+                    ),
+                    entries.join("\n"),
+                    false,
+                )
             }
         }
     }

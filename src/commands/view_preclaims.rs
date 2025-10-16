@@ -15,6 +15,7 @@ use crate::{
 
 pub struct World {
     name: String,
+    reality: Option<String>,
     preclaim_end: i64,
     slots: Vec<SlotId>,
 }
@@ -59,20 +60,21 @@ impl Paginate<World, SlotId, Slot, &Player> for ViewPreclaimsCommand {
     const PAGE_SIZE: usize = 24;
 
     async fn get_containers(bot: &Bot, _: &Player) -> Vec<World> {
-        if let Ok(response) = query!("SELECT worlds.name AS world_name, preclaim_end, slots.id AS slot_id FROM worlds INNER JOIN slots ON worlds.id = slots.world WHERE preclaim_end > strftime('%s', 'now') ORDER BY slots.name").fetch_all(&bot.db).await {
-            let mut worlds: HashMap<String, (i64, Vec<SlotId>)> = HashMap::new();
+        if let Ok(response) = query!("SELECT worlds.name AS world_name, realities.name AS reality, preclaim_end, slots.id AS slot_id FROM worlds INNER JOIN slots ON worlds.id = slots.world LEFT JOIN realities ON worlds.reality = realities.id WHERE preclaim_end > strftime('%s', 'now') ORDER BY slots.name").fetch_all(&bot.db).await {
+            let mut worlds: HashMap<String, (Option<String>, i64, Vec<SlotId>)> = HashMap::new();
 
             for record in response {
                 worlds
                     .entry(record.world_name)
-                    .and_modify(|(_, vec)| vec.push(SlotId(record.slot_id)))
-                    .or_insert((record.preclaim_end, vec![SlotId(record.slot_id)]));
+                    .and_modify(|(_, _, vec)| vec.push(SlotId(record.slot_id)))
+                    .or_insert((record.reality, record.preclaim_end, vec![SlotId(record.slot_id)]));
             }
 
             let mut worlds_vec: Vec<_> = worlds
                 .into_iter()
-                .map(|(world_name, (preclaim_end, slots))| World {
+                .map(|(world_name, (reality, preclaim_end, slots))| World {
                     name: world_name,
+                    reality,
                     preclaim_end,
                     slots,
                 })
@@ -116,7 +118,7 @@ impl PageContainer<SlotId, Slot, &Player> for World {
 
     fn page_setup(&self) -> CreateEmbed {
         CreateEmbed::new()
-            .title(&self.name)
+            .title(format!("{}{}", self.name, if let Some(reality) = &self.reality { format!(" [{reality}]") } else { String::new() }))
             .footer(CreateEmbedFooter::new("Preclaim end:"))
             .timestamp(Timestamp::from_unix_timestamp(self.preclaim_end).unwrap_or_default())
             .colour(Colour::DARK_PURPLE)
@@ -182,13 +184,8 @@ impl ViewPreclaimsCommand {
                 return;
             };
 
-            if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ?", player.id).fetch_optional(&bot.db).await {
-                if response.is_some_and(|record| record.claims > player.claims) {
-                    interaction.simple_reply(&ctx, "Cannot preclaim without an available claim").await;
-                    return;
-                }
-            } else {
-                interaction.simple_reply(&ctx, "Failed to get current claims").await;
+            if let Err(reason) = bot.can_preclaim_slot(&player, slot_id).await {
+                interaction.simple_reply(&ctx, reason).await;
                 return;
             }
 

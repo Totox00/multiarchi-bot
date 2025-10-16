@@ -44,17 +44,6 @@ impl Command for ClaimCommand {
             return;
         };
 
-        let mut must_be_free = false;
-
-        if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? LIMIT 1", player.id).fetch_optional(&bot.db).await {
-            if response.is_some_and(|record| record.claims >= player.claims) {
-                must_be_free = true;
-            }
-        } else {
-            command.simple_reply(&ctx, "Failed to get current claims").await;
-            return;
-        }
-
         let (slot_id, free) = if let Ok(response) = query!(
             "SELECT id, free FROM tracked_slots WHERE name = ? AND world in (SELECT id FROM tracked_worlds WHERE name = ?) LIMIT 1",
             slot,
@@ -69,11 +58,6 @@ impl Command for ClaimCommand {
             return;
         };
 
-        if must_be_free && !free {
-            command.simple_reply(&ctx, "You are already at claim limit").await;
-            return;
-        }
-
         if let Ok(response) = query!("SELECT id FROM claims WHERE slot = ? LIMIT 1", slot_id).fetch_optional(&bot.db).await {
             if response.is_some() {
                 command.simple_reply(&ctx, "Slot is already claimed").await;
@@ -82,6 +66,13 @@ impl Command for ClaimCommand {
         } else {
             command.simple_reply(&ctx, "Failed to get claim status for slot").await;
             return;
+        }
+
+        if !free {
+            if let Err(reason) = bot.can_claim_slot(&player, slot_id).await {
+                command.simple_reply(&ctx, reason).await;
+                return;
+            }
         }
 
         let _ = command.defer_ephemeral(&ctx.http).await;

@@ -1,13 +1,13 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serenity::all::{
-    CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
+    AutocompleteOption, CommandInteraction, CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
     EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
 use sqlx::query;
 use tokio::{spawn, time::sleep};
 
-use crate::{commands::Command, util::SimpleReply, Bot};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
 
 pub struct NewWorldCommand {}
 
@@ -21,6 +21,11 @@ impl Command for NewWorldCommand {
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the new world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "preclaim-end", "Time preclaims close, as UNIX timestamp").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Attachment, "slot-file", "Output file from clean_yamls").required(true))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "reality", "Name of the reality")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "message", "Additional message to display").required(false))
     }
 
@@ -33,6 +38,7 @@ impl Command for NewWorldCommand {
         }
 
         let mut name = "";
+        let mut reality_name = None;
         let mut preclaim_end = 0;
         let mut slot_file = None;
         let mut message = None;
@@ -40,10 +46,10 @@ impl Command for NewWorldCommand {
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("name", ResolvedValue::String(value)) => name = value,
+                ("reality-name", ResolvedValue::String(value)) => reality_name = Some(value),
                 ("preclaim-end", ResolvedValue::Integer(value)) => preclaim_end = value,
                 ("slot-file", ResolvedValue::Attachment(value)) => slot_file = Some(value),
                 ("message", ResolvedValue::String(value)) => message = Some(value),
-
                 _ => (),
             }
         }
@@ -52,6 +58,17 @@ impl Command for NewWorldCommand {
             command.simple_reply(&ctx, "A world name is required").await;
             return;
         }
+
+        let reality = if let Some(reality_name) = reality_name {
+            if let Ok(response) = query!("SELECT id FROM realities WHERE name = ? LIMIT 1", reality_name).fetch_one(&bot.db).await {
+                Some(response.id)
+            } else {
+                command.simple_reply(&ctx, "Failed to get reality").await;
+                return;
+            }
+        } else {
+            None
+        };
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
         let current_secs = current_time.as_secs();
@@ -93,7 +110,7 @@ impl Command for NewWorldCommand {
             return;
         };
 
-        if let Ok(response) = query!("INSERT INTO worlds (name, preclaim_end) VALUES (?, ?) RETURNING id", name, preclaim_end)
+        if let Ok(response) = query!("INSERT INTO worlds (name, preclaim_end, reality) VALUES (?, ?, ?) RETURNING id", name, preclaim_end, reality)
             .fetch_one(&bot.db)
             .await
         {
@@ -118,7 +135,8 @@ impl Command for NewWorldCommand {
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[<@&1342190668231213176>] {slot_len} slots available for preclaim in new world until <t:{preclaim_end}:f>. Use `/view-preclaims` to view them and make preclaims.{}",
+                            "[<@&1342190668231213176>] {slot_len} slots available for preclaim in {name}{} until <t:{preclaim_end}:f>. Use `/view-preclaims` to view them and make preclaims.{}",
+                            if let Some(reality_name) = reality_name { format!(" in {reality_name}") } else { String::new() },
                             if let Some(message) = message { format!(" {message}") } else { String::new() }
                         )),
                     )
@@ -137,6 +155,15 @@ impl Command for NewWorldCommand {
             });
         } else {
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to create new world")).await;
+        }
+    }
+
+    async fn autocomplete(bot: &Bot, ctx: Context, interaction: CommandInteraction) {
+        match interaction.data.autocomplete() {
+            Some(AutocompleteOption { name: "reality", value, .. }) => bot.autocomplete_realities(ctx, &interaction, value).await,
+            Some(_) | None => {
+                interaction.no_autocomplete(&ctx).await;
+            }
         }
     }
 }
