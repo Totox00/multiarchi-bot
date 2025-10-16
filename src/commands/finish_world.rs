@@ -46,12 +46,27 @@ impl Command for FinishWorldCommand {
 
         let mut output = vec![];
 
+        if let Err(err) = query!(
+            "DELETE FROM updates WHERE slot IN (SELECT id FROM tracked_slots WHERE world IN (SELECT id FROM tracked_worlds WHERE name = ?))",
+            world
+        )
+        .execute(&mut *transaction)
+        .await
+        {
+            println!("Failed to delete status updates: {err}");
+            let _ = transaction.rollback().await;
+            let _ = command
+                .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete status updates. Aborting"))
+                .await;
+            return;
+        }
+
         if let Ok(slot_response) = query!("SELECT id, name, games, points FROM tracked_slots WHERE world in (SELECT id FROM tracked_worlds WHERE name = ?)", world)
             .fetch_all(&mut *transaction)
             .await
         {
             for record in slot_response {
-                if let Ok(response) = query!(
+                match query!(
                     "UPDATE players SET points = points + ? WHERE id IN (SELECT player FROM claims WHERE slot = ?) RETURNING snowflake",
                     record.points,
                     record.id
@@ -59,27 +74,33 @@ impl Command for FinishWorldCommand {
                 .fetch_optional(&mut *transaction)
                 .await
                 {
-                    if let Some(response) = response {
-                        output.push((record.name, Some(response.snowflake)));
+                    Ok(response) => {
+                        if let Some(response) = response {
+                            output.push((record.name, Some(response.snowflake)));
 
-                        if query!("DELETE FROM claims WHERE slot = ?", record.id).execute(&mut *transaction).await.is_err() {
+                            if let Err(err) = query!("DELETE FROM claims WHERE slot = ?", record.id).execute(&mut *transaction).await {
+                                println!("Failed to delete claim: {err}");
+                                let _ = transaction.rollback().await;
+                                let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete claim. Aborting")).await;
+                                return;
+                            }
+                        } else {
+                            output.push((record.name, None));
+                        }
+
+                        if let Err(err) = query!("DELETE FROM tracked_slots WHERE id = ?", record.id).execute(&mut *transaction).await {
+                            println!("Failed to delete slot: {err}");
                             let _ = transaction.rollback().await;
-                            let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete claim. Aborting")).await;
+                            let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete slot. Aborting")).await;
                             return;
                         }
-                    } else {
-                        output.push((record.name, None));
                     }
-
-                    if query!("DELETE FROM tracked_slots WHERE id = ?", record.id).execute(&mut *transaction).await.is_err() {
+                    Err(err) => {
+                        println!("Failed to update points: {err}");
                         let _ = transaction.rollback().await;
-                        let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete slot. Aborting")).await;
+                        let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to update points. Aborting")).await;
                         return;
                     }
-                } else {
-                    let _ = transaction.rollback().await;
-                    let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to update points. Aborting")).await;
-                    return;
                 }
             }
         } else {
@@ -88,7 +109,8 @@ impl Command for FinishWorldCommand {
             return;
         }
 
-        if query!("DELETE FROM tracked_worlds WHERE name = ?", world).execute(&mut *transaction).await.is_err() {
+        if let Err(err) = query!("DELETE FROM tracked_worlds WHERE name = ?", world).execute(&mut *transaction).await {
+            println!("Failed to delete world: {err}");
             let _ = transaction.rollback().await;
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete world. Aborting")).await;
             return;
@@ -102,7 +124,7 @@ impl Command for FinishWorldCommand {
 
         let mut iter = output.into_iter().array_chunks::<50>();
         for chunk in iter.by_ref() {
-            if status_channel
+            if let Err(err) = status_channel
                 .send_message(
                     &ctx,
                     CreateMessage::new().embed(
@@ -116,8 +138,8 @@ impl Command for FinishWorldCommand {
                     ),
                 )
                 .await
-                .is_err()
             {
+                println!("Failed to post completion to status channel: {err}");
                 let _ = transaction.rollback().await;
                 let _ = command
                     .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to post completion to status channel. Aborting"))
@@ -128,8 +150,8 @@ impl Command for FinishWorldCommand {
 
         if let Some(chunk) = iter.into_remainder() {
             let chunk: Vec<_> = chunk.collect();
-            if !chunk.is_empty()
-                && status_channel
+            if !chunk.is_empty() {
+                if let Err(err) = status_channel
                     .send_message(
                         &ctx,
                         CreateMessage::new().embed(
@@ -143,17 +165,19 @@ impl Command for FinishWorldCommand {
                         ),
                     )
                     .await
-                    .is_err()
-            {
-                let _ = transaction.rollback().await;
-                let _ = command
-                    .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to post completion to status channel. Aborting"))
-                    .await;
-                return;
+                {
+                    println!("Failed to post completion to status channel: {err}");
+                    let _ = transaction.rollback().await;
+                    let _ = command
+                        .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to post completion to status channel. Aborting"))
+                        .await;
+                    return;
+                }
             }
         }
 
-        if transaction.commit().await.is_err() {
+        if let Err(err) = transaction.commit().await {
+            println!("Failed to commit transaction: {err}");
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to commit transaction. Aborting")).await;
             return;
         }
