@@ -69,7 +69,7 @@ impl Command for ClaimCommand {
         }
 
         if !free {
-            if let Err(reason) = bot.can_claim_slot(&player, slot_id).await {
+            if let Err(reason) = bot.can_claim_slot(player.id, slot_id).await {
                 command.simple_reply(&ctx, reason).await;
                 return;
             }

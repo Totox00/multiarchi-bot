@@ -132,7 +132,9 @@ pub async fn resolve_preclaims(bot: &Bot, name: &str) -> Option<Vec<(i64, i64)>>
         .await
         .ok()?
         {
-            preclaims.entry(record.slot).and_modify(|vec| vec.push(record.player)).or_insert(vec![record.player]);
+            if bot.can_preclaim_slot(record.player, record.slot).await.is_ok() {
+                preclaims.entry(record.slot).and_modify(|vec| vec.push(record.player)).or_insert(vec![record.player]);
+            }
         }
 
         let selected_preclaims: Vec<_> = {

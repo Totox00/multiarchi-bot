@@ -184,7 +184,7 @@ impl ViewPreclaimsCommand {
                 return;
             };
 
-            if let Err(reason) = bot.can_preclaim_slot(&player, slot_id).await {
+            if let Err(reason) = bot.can_preclaim_slot(player.id, slot_id).await {
                 interaction.simple_reply(&ctx, reason).await;
                 return;
             }

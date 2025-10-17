@@ -88,7 +88,7 @@ impl Bot {
         }
     }
 
-    async fn can_claim_slot(&self, player: &Player, slot: i64) -> Result<(), &'static str> {
+    async fn can_claim_slot(&self, player: i64, slot: i64) -> Result<(), &'static str> {
         if let Ok(response) = query!(
             "SELECT realities.id, realities.max_claims FROM tracked_slots LEFT JOIN tracked_worlds ON tracked_worlds.id = tracked_slots.world LEFT JOIN realities ON realities.id = tracked_worlds.reality WHERE tracked_slots.id = ?",
             slot
@@ -109,7 +109,7 @@ impl Bot {
         }
     }
 
-    async fn can_preclaim_slot(&self, player: &Player, slot: i64) -> Result<(), &'static str> {
+    async fn can_preclaim_slot(&self, player: i64, slot: i64) -> Result<(), &'static str> {
         if let Ok(response) = query!(
             "SELECT realities.id, realities.max_claims FROM slots LEFT JOIN worlds ON worlds.id = slots.world LEFT JOIN realities ON realities.id = worlds.reality WHERE slots.id = ?",
             slot
@@ -130,9 +130,9 @@ impl Bot {
         }
     }
 
-    async fn can_claim_in_reality(&self, player: &Player, reality: Option<Reality>) -> Result<(), &'static str> {
+    async fn can_claim_in_reality(&self, player: i64, reality: Option<Reality>) -> Result<(), &'static str> {
         let (max_claims, current_claims) = if let Some(reality) = reality {
-            let realities: Vec<_> = if let Ok(response) = query!("SELECT reality FROM current_realities WHERE player = ?", player.id).fetch_all(&self.db).await {
+            let realities: Vec<_> = if let Ok(response) = query!("SELECT reality FROM current_realities WHERE player = ?", player).fetch_all(&self.db).await {
                 response.into_iter().filter_map(|record| record.reality).collect()
             } else {
                 return Err("Failed to get current realities");
@@ -144,7 +144,7 @@ impl Bot {
 
             (
                 reality.max_claims,
-                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality = ?", player.id, reality.id)
+                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality = ?", player, reality.id)
                     .fetch_optional(&self.db)
                     .await
                 {
@@ -156,10 +156,7 @@ impl Bot {
         } else {
             (
                 NO_REALITY_CLAIMS,
-                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality IS NULL", player.id)
-                    .fetch_optional(&self.db)
-                    .await
-                {
+                if let Ok(response) = query!("SELECT claims FROM current_claims WHERE player = ? AND reality IS NULL", player).fetch_optional(&self.db).await {
                     response.map(|record| record.claims).unwrap_or(0)
                 } else {
                     return Err("Failed to get current claims");
