@@ -92,7 +92,7 @@ impl Command for TrackWorldCommand {
         } else {
             None
         };
-        
+
         let _ = command.defer_ephemeral(&ctx.http).await;
 
         let tracker_id = if let Some(id) = tracker.split('/').next_back() {
@@ -127,7 +127,7 @@ impl Command for TrackWorldCommand {
         };
 
         let free = if use_claims { 0 } else { 1 };
-        let mut unclaimed_slots = false;
+        let mut unclaimed_slots = 0;
         resolve_preclaims(bot, world_name).await;
         for (slot, data) in data {
             let game_str = game_str(&data.games);
@@ -177,7 +177,7 @@ impl Command for TrackWorldCommand {
                     println!("Failed to transfer claim for slot {slot} in world {world_id}");
                 }
             } else {
-                unclaimed_slots = true;
+                unclaimed_slots += 1;
             }
         }
 
@@ -185,13 +185,13 @@ impl Command for TrackWorldCommand {
 
         let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Started tracking world")).await;
 
-        if unclaimed_slots {
+        if unclaimed_slots > 0 {
             if let Some(claims_channel) = Bot::claims_channel(&ctx).await {
                 let _ = claims_channel
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[<@&1342191138056175707>] New world `{world_name}` available{}. Use `/claim` make your claims.{}",
+                            "[<@&1342191138056175707>] New world `{world_name}` available with {unclaimed_slots} unclaimed slots{}. Use `/claim` make your claims.{}",
                             if let Some(reality_name) = reality_name { format!(" in {reality_name}") } else { String::new() },
                             if let Some(message) = message { format!(" {message}") } else { String::new() }
                         )),
