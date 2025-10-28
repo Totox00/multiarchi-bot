@@ -181,6 +181,11 @@ impl Command for TrackWorldCommand {
             }
         }
 
+        if let Some(reality_name) = reality_name {
+            bot.log(&format!("Started tracking world {world_name} in {reality_name}"));
+        } else {
+            bot.log(&format!("Started tracking world {world_name}"));
+        }
         bot.push_needed().await;
 
         let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Started tracking world")).await;

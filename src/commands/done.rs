@@ -58,6 +58,7 @@ impl Command for DoneCommand {
             if response.rows_affected() == 0 {
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to mark slot as done")).await;
             } else {
+                bot.log(&format!("Slot {slot} in {world} was marked done by {}", player.name));
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Successfully marked slot as done")).await;
             }
         } else {

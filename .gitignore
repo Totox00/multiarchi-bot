@@ -4,3 +4,4 @@ db.sqlite
 db.sqlite-shm
 db.sqlite-wal
 sheets_key.json
+bot.log

@@ -82,6 +82,7 @@ impl Command for ClaimCommand {
                 println!("Failed to remove old preclaims from {}", player.id)
             }
 
+            bot.log(&format!("Slot {slot} in {world} was claimed by {}", player.name));
             bot.push_needed().await;
             let _ = command
                 .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("Successfully claimed {slot} in {world}")))

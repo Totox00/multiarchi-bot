@@ -56,6 +56,7 @@ impl Command for UnclaimCommand {
         .await
         .is_ok()
         {
+            bot.log(&format!("Slot {slot} in {world} was unclaimed"));
             bot.push_needed().await;
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Successfully unclaimed slot")).await;
         } else {

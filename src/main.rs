@@ -10,10 +10,13 @@ mod util;
 
 use std::{
     env,
+    fs::{File, OpenOptions},
+    io::Write,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use chrono::Local;
 use dotenvy::from_filename_override;
 use google_sheets4::{
     api::{ClearValuesRequest, ValueRange},
@@ -47,6 +50,7 @@ use crate::{commands::interaction_create, scrape::Status};
 const MAX_REALITIES: usize = 2;
 const NO_REALITY_CLAIMS: i64 = 2;
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
+const LOG_PATH: &str = "bot.log";
 
 struct Bot {
     db: SqlitePool,
@@ -54,6 +58,7 @@ struct Bot {
     sheets: Sheets<HttpsConnector<HttpConnector>>,
     latest_push: Arc<Mutex<u64>>,
     pending_push: Arc<Mutex<bool>>,
+    log: Arc<Mutex<File>>,
 }
 
 struct Player {
@@ -85,6 +90,18 @@ impl Bot {
                 name: name.to_owned(),
                 points: response.points,
             })
+        }
+    }
+
+    fn log(&self, content: &str) {
+        let timestamp = Local::now();
+
+        if let Some(mut guard) = self.log.lock() {
+            if writeln!(guard, "[{timestamp}] {content}").is_err() {
+                println!("[FAILED LOG WRITE] [{timestamp}] {content}");
+            }
+        } else {
+            println!("[FAILED TO AQUIRE LOG FILE LOCK] [{timestamp}] {content}");
         }
     }
 
@@ -282,6 +299,8 @@ async fn main() {
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
+    let log = OpenOptions::new().append(true).create(true).open(LOG_PATH).unwrap();
+
     let db = SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(SqliteConnectOptions::new().filename("db.sqlite").create_if_missing(true))
@@ -328,6 +347,7 @@ async fn main() {
         sheets,
         latest_push: Arc::new(Mutex::new(0)),
         pending_push: Arc::new(Mutex::new(false)),
+        log: Arc::new(Mutex::new(log)),
     });
 
     let bot: &'static Bot = Box::leak(bot);
