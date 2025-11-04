@@ -17,7 +17,11 @@ impl Command for DoneCommand {
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
-        let user = i64::from(command.user.id);
+        if !bot.admins.contains(&command.user.id) {
+            command.simple_reply(&ctx, "You do not have permission to use this command").await;
+            return;
+        }
+
         let mut world = "";
         let mut slot = "";
 
@@ -39,17 +43,11 @@ impl Command for DoneCommand {
             return;
         }
 
-        let Some(player) = bot.get_player(user, &command.user.name).await else {
-            command.simple_reply(&ctx, "Failed to get user").await;
-            return;
-        };
-
         let _ = command.defer_ephemeral(&ctx.http).await;
 
         if let Ok(response) = query!(
-            "UPDATE tracked_slots SET status = 4 WHERE name = ? AND id IN (SELECT slot FROM claims WHERE player = ?) AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)",
+            "UPDATE tracked_slots SET status = 4 WHERE name = ? AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)",
             slot,
-            player.id,
             world
         )
         .execute(&bot.db)
@@ -58,7 +56,7 @@ impl Command for DoneCommand {
             if response.rows_affected() == 0 {
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to mark slot as done")).await;
             } else {
-                bot.log(&format!("Slot {slot} in {world} was marked done by {}", player.name));
+                bot.log(&format!("Slot {slot} in {world} was marked done by {}", command.user.name));
                 let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Successfully marked slot as done")).await;
             }
         } else {
