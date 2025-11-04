@@ -205,30 +205,32 @@ impl Command for BulkStatusCommand {
                         bot.autocomplete_slots(ctx, &interaction, value, world).await;
                     }
                 } else if let ("description", description_i_str) = name.split_at(11) {
-                    if let Ok(description_i) = description_i_str.parse::<u8>() {
-                        let mut world = None;
-                        let mut slot = None;
-                        let mut world_i = 0;
-                        for ResolvedOption { name, value, .. } in interaction.data.options() {
-                            if let (name, ResolvedValue::String(value)) = (name, value) {
-                                if name.starts_with("slot") && name.ends_with(description_i_str) {
-                                    slot = Some(value);
-                                }
-                                if let ("world", i) = name.split_at(5) {
-                                    if let Ok(i) = i.parse::<u8>() {
-                                        if description_i >= i && world_i < i {
-                                            world = Some(value);
-                                            world_i = i;
+                    if value.is_empty() {
+                        if let Ok(description_i) = description_i_str.parse::<u8>() {
+                            let mut world = None;
+                            let mut slot = None;
+                            let mut world_i = 0;
+                            for ResolvedOption { name, value, .. } in interaction.data.options() {
+                                if let (name, ResolvedValue::String(value)) = (name, value) {
+                                    if name.starts_with("slot") && name.ends_with(description_i_str) {
+                                        slot = Some(value);
+                                    }
+                                    if let ("world", i) = name.split_at(5) {
+                                        if let Ok(i) = i.parse::<u8>() {
+                                            if description_i >= i && world_i < i {
+                                                world = Some(value);
+                                                world_i = i;
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
-                            if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world).fetch_one(&bot.db).await {
+                            if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
+                                if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world).fetch_one(&bot.db).await {
                                 let _ = interaction.autocomplete(&ctx, once(response.description)).await;
                                 return;
+                            }
                             }
                         }
                     }

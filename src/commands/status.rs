@@ -92,25 +92,27 @@ impl Command for StatusCommand {
                     bot.autocomplete_slots(ctx, &interaction, value, world).await;
                 }
             }
-            Some(AutocompleteOption { name: "description", .. }) => {
-                let mut world = None;
-                let mut slot = None;
+            Some(AutocompleteOption { name: "description", value, .. }) => {
+                if value.is_empty() {
+                    let mut world = None;
+                    let mut slot = None;
 
-                for ResolvedOption { name: option_name, value, .. } in interaction.data.options() {
-                    match (option_name, value) {
-                        ("world", ResolvedValue::String(value)) => world = Some(value),
-                        ("slot", ResolvedValue::String(value)) => slot = Some(value),
-                        _ => (),
+                    for ResolvedOption { name: option_name, value, .. } in interaction.data.options() {
+                        match (option_name, value) {
+                            ("world", ResolvedValue::String(value)) => world = Some(value),
+                            ("slot", ResolvedValue::String(value)) => slot = Some(value),
+                            _ => (),
+                        }
                     }
-                }
 
-                if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
-                    if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world)
+                    if let (Some(world), Some(slot), Some(player)) = (world, slot, bot.get_player(i64::from(interaction.user.id), &interaction.user.name).await) {
+                        if let Ok(response) = query!("SELECT description FROM updates WHERE player = ? AND slot IN (SELECT id FROM tracked_slots WHERE name = ? AND world IN (SELECT id FROM tracked_worlds WHERE name = ?)) ORDER BY timestamp DESC LIMIT 1", player.id, slot, world)
                         .fetch_one(&bot.db)
                         .await
-                    {
-                        let _ = interaction.autocomplete(&ctx, once(response.description)).await;
-                        return;
+                        {
+                            let _ = interaction.autocomplete(&ctx, once(response.description)).await;
+                            return;
+                        }
                     }
                 }
                 interaction.no_autocomplete(&ctx).await;
