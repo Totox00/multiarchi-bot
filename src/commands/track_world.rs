@@ -116,6 +116,17 @@ impl Command for TrackWorldCommand {
             return;
         };
 
+        if let Ok(response) = query!("SELECT name FROM tracked_worlds WHERE id IN (SELECT world FROM tracked_slots WHERE status < 2)")
+            .fetch_all(&bot.db)
+            .await
+        {
+            for record in response {
+                bot.update_scrape(&record.name).await;
+            }
+        }
+
+        bot.push_needed().await;
+
         let world_id = if let Ok(response) = query!("INSERT INTO tracked_worlds (tracker_id, name, reality) VALUES (?, ?, ?) RETURNING id", tracker_id, world_name, reality)
             .fetch_one(&bot.db)
             .await

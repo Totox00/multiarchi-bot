@@ -97,6 +97,17 @@ impl Command for NewWorldCommand {
 
         let _ = command.defer_ephemeral(&ctx.http).await;
 
+        if let Ok(response) = query!("SELECT name FROM tracked_worlds WHERE id IN (SELECT world FROM tracked_slots WHERE status < 2)")
+            .fetch_all(&bot.db)
+            .await
+        {
+            for record in response {
+                bot.update_scrape(&record.name).await;
+            }
+        }
+
+        bot.push_needed().await;
+
         let slot_file_content = if let Ok(content) = fetch_slot_file(&slot_file.url).await {
             content
         } else {
