@@ -107,6 +107,7 @@ impl Command for NewWorldCommand {
         }
 
         bot.push_needed().await;
+        bot.update_unspent_points().await;
 
         let slot_file_content = if let Ok(content) = fetch_slot_file(&slot_file.url).await {
             content

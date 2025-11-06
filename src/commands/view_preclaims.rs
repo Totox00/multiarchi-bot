@@ -10,7 +10,7 @@ use crate::{
     commands::Command,
     paginate::{PageContainer, PageDetails, PageItem, Paginate},
     util::SimpleReply,
-    Bot, Player,
+    Bot, Player, UNSPENT_POINTS_LIMIT,
 };
 
 pub struct World {
@@ -194,12 +194,26 @@ impl ViewPreclaimsCommand {
                 return;
             }
 
-            if query!("INSERT INTO preclaims (slot, player) VALUES (?, ?)", slot_id, player.id).execute(&bot.db).await.is_err() {
+            let blocked_by_unspent = player.unspent_points > UNSPENT_POINTS_LIMIT;
+            if query!("INSERT INTO preclaims (slot, player, blocked_by_unspent) VALUES (?, ?, ?)", slot_id, player.id, blocked_by_unspent)
+                .execute(&bot.db)
+                .await
+                .is_err()
+            {
                 interaction.simple_reply(&ctx, "Failed to create preclaim").await;
                 return;
             }
 
-            interaction.simple_reply(&ctx, "Successfully preclaimed slot").await;
+            if blocked_by_unspent {
+                interaction
+                    .simple_reply(
+                        &ctx,
+                        "Successfully preclaimed slot.\nYou have unspent points. These must be spent before preclaims are resolved for your preclaim to work",
+                    )
+                    .await;
+            } else {
+                interaction.simple_reply(&ctx, "Successfully preclaimed slot").await;
+            }
         } else if Self::try_handle_interaction(bot, &ctx, interaction, id, &player).await {
         } else {
             interaction.simple_reply(&ctx, "Unrecognized interraction").await;

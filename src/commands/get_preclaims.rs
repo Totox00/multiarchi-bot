@@ -10,7 +10,7 @@ use serenity::{
 };
 use sqlx::query;
 
-use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot};
+use crate::{autocomplete::Autocomplete, commands::Command, util::SimpleReply, Bot, UNSPENT_POINTS_LIMIT};
 
 pub struct GetPreclaimsCommand {}
 
@@ -102,6 +102,8 @@ impl Command for GetPreclaimsCommand {
 }
 
 pub async fn resolve_preclaims(bot: &Bot, name: &str) -> Option<Vec<(i64, i64)>> {
+    bot.update_unspent_points().await;
+
     if query!("SELECT resolved_preclaims FROM worlds WHERE name = ? LIMIT 1", name)
         .fetch_one(&bot.db)
         .await
@@ -125,13 +127,23 @@ pub async fn resolve_preclaims(bot: &Bot, name: &str) -> Option<Vec<(i64, i64)>>
         let mut preclaims: HashMap<i64, Vec<i64>> = HashMap::new();
 
         for record in query!(
-            "UPDATE preclaims SET status = 1 WHERE slot IN (SELECT id FROM slots WHERE world IN (SELECT id FROM worlds WHERE name = ?)) RETURNING slot, player",
+            "UPDATE preclaims SET status = 1 WHERE slot IN (SELECT id FROM slots WHERE world IN (SELECT id FROM worlds WHERE name = ?)) RETURNING slot, player, blocked_by_unspent",
             name
         )
         .fetch_all(&bot.db)
         .await
         .ok()?
         {
+            if record.blocked_by_unspent > 0 {
+                if let Ok(response) = query!("SELECT unspent_points FROM players WHERE id = ? LIMIT 1", record.player).fetch_one(&bot.db).await {
+                    if response.unspent_points > UNSPENT_POINTS_LIMIT {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
             if bot.can_preclaim_slot(record.player, record.slot).await.is_ok() {
                 preclaims.entry(record.slot).and_modify(|vec| vec.push(record.player)).or_insert(vec![record.player]);
             }

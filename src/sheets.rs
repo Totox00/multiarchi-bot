@@ -1,12 +1,25 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use google_sheets4::api::{ClearValuesRequest, ValueRange};
-use serde_json::json;
+use http_body_util::BodyExt;
+use serde::Deserialize;
+use serde_json::{from_slice, json};
 use sqlx::query;
 
-use crate::{Bot, scrape::Status};
+use crate::{scrape::Status, Bot};
 
 const SHEET_ID: &str = "1f0lmzxugcrut7q0Y8dSmCzZkfHw__Rwu-z6PCy3j7s4";
+
+#[derive(Debug, Deserialize)]
+struct UnspentPointsResponse {
+    #[serde(rename = "valueRanges")]
+    value_ranges: [UnspentPointsResponseValue; 2],
+}
+
+#[derive(Debug, Deserialize)]
+struct UnspentPointsResponseValue {
+    values: [Vec<String>; 1],
+}
 
 impl Bot {
     pub async fn push_needed(&self) {
@@ -102,5 +115,50 @@ impl Bot {
             .value_input_option("RAW")
             .doit()
             .await;
+    }
+
+    pub async fn update_unspent_points(&self) {
+        let response = match self
+            .sheets
+            .spreadsheets()
+            .values_batch_get(SHEET_ID)
+            .add_ranges("Archivists!A2:A")
+            .add_ranges("Archivists!D2:D")
+            .major_dimension("COLUMNS")
+            .doit()
+            .await
+        {
+            Ok((response, _)) => response.into_body(),
+            Err(err) => {
+                dbg!(err);
+                return;
+            }
+        };
+
+        let bytes = match response.collect().await {
+            Ok(bytes) => bytes.to_bytes(),
+            Err(err) => {
+                dbg!(err);
+                return;
+            }
+        };
+
+        let data = match from_slice::<UnspentPointsResponse>(&bytes) {
+            Ok(data) => data,
+            Err(err) => {
+                dbg!(err);
+                return;
+            }
+        };
+
+        for (name, unspent) in data.value_ranges[0].values[0].iter().zip(data.value_ranges[1].values[0].iter()) {
+            if let Ok(unspent) = unspent.parse::<i64>() {
+                if let Err(err) = query!("UPDATE players SET unspent_points = ? WHERE name = lower(?)", unspent, name).execute(&self.db).await {
+                    println!("Failed to set unspent points for {name}: {err:?}");
+                }
+            } else {
+                println!("Failed to parse unspent points: {unspent}");
+            }
+        }
     }
 }

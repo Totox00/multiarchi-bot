@@ -48,6 +48,7 @@ use crate::commands::interaction_create;
 
 const MAX_REALITIES: usize = 2;
 const NO_REALITY_CLAIMS: i64 = 2;
+const UNSPENT_POINTS_LIMIT: i64 = 0;
 const LOG_PATH: &str = "bot.log";
 
 struct Bot {
@@ -62,7 +63,7 @@ struct Bot {
 struct Player {
     pub id: i64,
     pub name: String,
-    pub points: i64,
+    pub unspent_points: i64,
 }
 
 #[derive(Clone, Copy)]
@@ -73,20 +74,20 @@ struct Reality {
 
 impl Bot {
     async fn get_player(&self, snowflake: i64, name: &str) -> Option<Player> {
-        if let Ok(response) = query_as!(Player, "SELECT id, name, points FROM players WHERE snowflake = ? LIMIT 1", snowflake)
+        if let Ok(response) = query_as!(Player, "SELECT id, name, unspent_points FROM players WHERE snowflake = ? LIMIT 1", snowflake)
             .fetch_one(&self.db)
             .await
         {
             Some(response)
         } else {
-            let response = query!("INSERT INTO players (snowflake, name) VALUES (?, ?) RETURNING id, points", snowflake, name)
+            let response = query!("INSERT INTO players (snowflake, name) VALUES (?, ?) RETURNING id, unspent_points", snowflake, name)
                 .fetch_one(&self.db)
                 .await
                 .ok()?;
             Some(Player {
                 id: response.id,
                 name: name.to_owned(),
-                points: response.points,
+                unspent_points: response.unspent_points,
             })
         }
     }
