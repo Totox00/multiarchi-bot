@@ -46,7 +46,7 @@ impl Command for NewWorldCommand {
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("name", ResolvedValue::String(value)) => name = value,
-                ("reality-name", ResolvedValue::String(value)) => reality_name = Some(value),
+                ("reality", ResolvedValue::String(value)) => reality_name = Some(value),
                 ("preclaim-end", ResolvedValue::Integer(value)) => preclaim_end = value,
                 ("slot-file", ResolvedValue::Attachment(value)) => slot_file = Some(value),
                 ("message", ResolvedValue::String(value)) => message = Some(value),
