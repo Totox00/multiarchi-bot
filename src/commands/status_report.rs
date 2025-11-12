@@ -107,7 +107,7 @@ impl Command for StatusReportCommand {
 
         let _ = command.defer_ephemeral(&ctx).await;
 
-        if bot.admins.contains(&command.user.id) {
+        if bot.privileged.contains(&command.user.id) {
             bot.update_scrape(world).await;
             bot.push_needed().await;
         }

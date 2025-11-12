@@ -54,6 +54,7 @@ const LOG_PATH: &str = "bot.log";
 struct Bot {
     db: SqlitePool,
     admins: Vec<UserId>,
+    privileged: Vec<UserId>,
     sheets: Sheets<HttpsConnector<HttpConnector>>,
     latest_push: Arc<Mutex<u64>>,
     pending_push: Arc<Mutex<bool>>,
@@ -216,6 +217,11 @@ async fn main() {
         UserId::new(622847469495123990), // dragorrod
     ];
 
+    let mut privileged = admins.clone();
+    privileged.extend_from_slice(&[
+        UserId::new(474357614432747551), // lulumitchell
+    ]);
+
     let _ = CryptoProvider::install_default(aws_lc_rs::default_provider());
     let client: SheetsClient<_, BoxBody<google_sheets4::hyper::body::Bytes, google_sheets4::hyper::Error>> = SheetsClient::builder(TokioExecutor::new()).build(
         HttpsConnectorBuilder::new()
@@ -248,6 +254,7 @@ async fn main() {
     let bot = Box::new(Bot {
         db,
         admins,
+        privileged,
         sheets,
         latest_push: Arc::new(Mutex::new(0)),
         pending_push: Arc::new(Mutex::new(false)),

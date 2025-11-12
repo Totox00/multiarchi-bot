@@ -19,7 +19,7 @@ impl Command for MarkFreeCommand {
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let user = command.user.id;
 
-        if !bot.admins.contains(&user) {
+        if !bot.privileged.contains(&user) {
             command.simple_reply(&ctx, "You do not have permission to use this command").await;
             return;
         }

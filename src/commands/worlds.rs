@@ -38,7 +38,7 @@ impl Command for WorldsCommand {
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
         let _ = command.defer_ephemeral(&ctx.http).await;
 
-        if bot.admins.contains(&command.user.id) {
+        if bot.privileged.contains(&command.user.id) {
             if let Ok(response) = query!("SELECT name FROM tracked_worlds WHERE id IN (SELECT world FROM tracked_slots WHERE status < 2)")
                 .fetch_all(&bot.db)
                 .await

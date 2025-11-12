@@ -17,7 +17,7 @@ impl Command for DoneCommand {
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
-        if !bot.admins.contains(&command.user.id) {
+        if !bot.privileged.contains(&command.user.id) {
             command.simple_reply(&ctx, "You do not have permission to use this command").await;
             return;
         }
