@@ -66,13 +66,24 @@ impl Command for FinishWorldCommand {
             .await
         {
             for record in slot_response {
-                match query!(
-                    "UPDATE players SET points = points + ? WHERE id IN (SELECT player FROM claims WHERE slot = ?) RETURNING snowflake",
-                    record.points,
-                    record.id
-                )
-                .fetch_optional(&mut *transaction)
-                .await
+                let points_recipient = match query!("SELECT id, transfer_to FROM players WHERE id IN (SELECT player FROM claims WHERE slot = ?) LIMIT 1", record.id)
+                    .fetch_optional(&bot.db)
+                    .await
+                {
+                    Ok(response) => response.map(|record| record.transfer_to.unwrap_or(record.id)),
+                    Err(err) => {
+                        println!("Failed to get points recipient for slot {}: {err}", record.id);
+                        let _ = transaction.rollback().await;
+                        let _ = command
+                            .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get points recipient for . Aborting"))
+                            .await;
+                        return;
+                    }
+                };
+
+                match query!("UPDATE players SET points = points + ? WHERE id = ? RETURNING snowflake", record.points, points_recipient)
+                    .fetch_optional(&mut *transaction)
+                    .await
                 {
                     Ok(response) => {
                         if let Some(response) = response {

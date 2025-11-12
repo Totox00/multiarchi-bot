@@ -20,14 +20,12 @@ pub mod unclaimed;
 pub mod unpreclaim;
 pub mod view_preclaims;
 pub mod worlds;
+pub mod transfer_points;
 
 use crate::{
     autocomplete::Autocomplete,
     commands::{
-        bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, find::FindCommand, finish_world::FinishWorldCommand,
-        get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_reality::NewRealityCommand, new_world::NewWorldCommand, public::PublicCommand, register_commands::RegisterCommandsCommand,
-        reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, status_report::StatusReportCommand, track_world::TrackWorldCommand, unclaim::UnclaimCommand,
-        unclaimed::UnclaimedCommand, unpreclaim::UnpreclaimCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand,
+        bulk_status::BulkStatusCommand, cancel_preclaims::CancelPreclaimsCommand, claim::ClaimCommand, claimed::ClaimedCommand, done::DoneCommand, find::FindCommand, finish_world::FinishWorldCommand, get_preclaims::GetPreclaimsCommand, mark_free::MarkFreeCommand, new_reality::NewRealityCommand, new_world::NewWorldCommand, public::PublicCommand, register_commands::RegisterCommandsCommand, reschedule_preclaims::ReschedulePreclaimsCommand, status::StatusCommand, status_report::StatusReportCommand, track_world::TrackWorldCommand, transfer_points::TransferPointsCommand, unclaim::UnclaimCommand, unclaimed::UnclaimedCommand, unpreclaim::UnpreclaimCommand, view_preclaims::ViewPreclaimsCommand, worlds::WorldsCommand
     },
 };
 use serenity::all::{Command as SerenityCommand, CommandInteraction, Context, CreateCommand, Interaction};
@@ -60,6 +58,7 @@ pub async fn register_all(ctx: &Context) -> Result<Vec<SerenityCommand>, serenit
             RegisterCommandsCommand::register(),
             UnpreclaimCommand::register(),
             NewRealityCommand::register(),
+            TransferPointsCommand::register()
         ],
     )
     .await
@@ -90,6 +89,7 @@ pub async fn interaction_create(bot: &Bot, ctx: Context, interaction: Interactio
             RegisterCommandsCommand::NAME => RegisterCommandsCommand::execute(bot, ctx, command).await,
             UnpreclaimCommand::NAME => UnpreclaimCommand::execute(bot, ctx, command).await,
             NewRealityCommand::NAME => NewRealityCommand::execute(bot, ctx, command).await,
+            TransferPointsCommand::NAME => TransferPointsCommand::execute(bot, ctx, command).await,
             _ => (),
         },
         Interaction::Component(component) => {
