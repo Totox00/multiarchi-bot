@@ -116,6 +116,15 @@ impl Command for FinishWorldCommand {
             return;
         }
 
+        if let Err(err) = query!("DELETE FROM worlds WHERE name = ?", world).execute(&mut *transaction).await {
+            println!("Failed to delete preclaim world: {err}");
+            let _ = transaction.rollback().await;
+            let _ = command
+                .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to delete preclaim world. Aborting"))
+                .await;
+            return;
+        }
+
         let Some(status_channel) = Bot::status_channel(&ctx).await else {
             let _ = transaction.rollback().await;
             let _ = command.edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to get status channel. Aborting")).await;
