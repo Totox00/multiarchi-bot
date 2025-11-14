@@ -15,7 +15,7 @@ pub struct SlotData {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LastActivity {
-    Inactive,
+    Inactive(u32),
     Unstarted,
     Activity(u32),
 }
@@ -129,13 +129,16 @@ pub fn scrape(html: &str) -> Option<HashMap<String, SlotData>> {
         let checks: u32 = checks.trim().parse().ok()?;
         let checks_total: u32 = checks_total.trim().parse().ok()?;
 
-        let last_activity = if !status.active() {
-            LastActivity::Inactive
-        } else if last_activity == "None" {
+        let last_activity = if last_activity == "None" {
             LastActivity::Unstarted
         } else {
             let (seconds, _) = last_activity.split_once('.')?;
-            LastActivity::Activity(seconds.parse::<u32>().ok()? / 60)
+            let minutes = seconds.parse::<u32>().ok()? / 60;
+            if status.active() {
+                LastActivity::Activity(minutes)
+            } else {
+                LastActivity::Inactive(minutes)
+            }
         };
 
         if status != Status::Goal && checks == 0 {
@@ -173,8 +176,13 @@ pub fn scrape(html: &str) -> Option<HashMap<String, SlotData>> {
 impl LastActivity {
     fn merge(&mut self, next_last_activity: LastActivity) {
         match (&self, next_last_activity) {
-            (LastActivity::Inactive, other) => *self = other,
-            (_, LastActivity::Inactive) | (LastActivity::Unstarted, _) => (),
+            (LastActivity::Inactive(last_activity), LastActivity::Inactive(next_last_activity)) => {
+                if next_last_activity < *last_activity {
+                    *self = LastActivity::Activity(next_last_activity);
+                }
+            }
+            (LastActivity::Inactive(_), other) => *self = other,
+            (_, LastActivity::Inactive(_)) | (LastActivity::Unstarted, _) => (),
             (_, LastActivity::Unstarted) => *self = LastActivity::Unstarted,
             (LastActivity::Activity(last_activity), LastActivity::Activity(next_last_activity)) => {
                 if next_last_activity > *last_activity {
@@ -185,10 +193,9 @@ impl LastActivity {
     }
 
     pub fn to_option(self) -> Option<u32> {
-        if let LastActivity::Activity(activity) = self {
-            Some(activity)
-        } else {
-            None
+        match self {
+            LastActivity::Inactive(activity) | LastActivity::Activity(activity) => Some(activity),
+            LastActivity::Unstarted => None,
         }
     }
 }
