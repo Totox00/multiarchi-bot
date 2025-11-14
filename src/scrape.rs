@@ -10,7 +10,14 @@ pub struct SlotData {
     pub games: Vec<String>,
     pub checks: u32,
     pub checks_total: u32,
-    pub last_activity: Option<u32>,
+    pub last_activity: LastActivity,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum LastActivity {
+    Inactive,
+    Unstarted,
+    Activity(u32),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -72,11 +79,12 @@ impl Bot {
             }
 
             let status_i64 = data.status.as_i64();
+            let last_activity_option = data.last_activity.to_option();
             if query!(
                 "UPDATE tracked_slots SET status = ?, checks = ?, last_activity = ? WHERE name = ?",
                 status_i64,
                 data.checks,
-                data.last_activity,
+                last_activity_option,
                 slot
             )
             .execute(&self.db)
@@ -121,11 +129,13 @@ pub fn scrape(html: &str) -> Option<HashMap<String, SlotData>> {
         let checks: u32 = checks.trim().parse().ok()?;
         let checks_total: u32 = checks_total.trim().parse().ok()?;
 
-        let last_activity = if last_activity == "None" {
-            None
+        let last_activity = if !status.active() {
+            LastActivity::Inactive
+        } else if last_activity == "None" {
+            LastActivity::Unstarted
         } else {
             let (seconds, _) = last_activity.split_once('.')?;
-            Some(seconds.parse::<u32>().ok()? / 60)
+            LastActivity::Activity(seconds.parse::<u32>().ok()? / 60)
         };
 
         if status != Status::Goal && checks == 0 {
@@ -144,7 +154,9 @@ pub fn scrape(html: &str) -> Option<HashMap<String, SlotData>> {
                 slot_data.games.push(game.to_string());
                 slot_data.checks += checks;
                 slot_data.checks_total += checks_total;
-                merge_last_activity(&mut slot_data.last_activity, last_activity);
+                if status.active() {
+                    slot_data.last_activity.merge(last_activity);
+                }
             })
             .or_insert(SlotData {
                 status,
@@ -156,6 +168,29 @@ pub fn scrape(html: &str) -> Option<HashMap<String, SlotData>> {
     }
 
     Some(out)
+}
+
+impl LastActivity {
+    fn merge(&mut self, next_last_activity: LastActivity) {
+        match (&self, next_last_activity) {
+            (LastActivity::Inactive, other) => *self = other,
+            (_, LastActivity::Inactive) | (LastActivity::Unstarted, _) => (),
+            (_, LastActivity::Unstarted) => *self = LastActivity::Unstarted,
+            (LastActivity::Activity(last_activity), LastActivity::Activity(next_last_activity)) => {
+                if next_last_activity > *last_activity {
+                    *self = LastActivity::Activity(next_last_activity);
+                }
+            }
+        }
+    }
+
+    fn to_option(self) -> Option<u32> {
+        if let LastActivity::Activity(activity) = self {
+            Some(activity)
+        } else {
+            None
+        }
+    }
 }
 
 impl Status {
@@ -180,6 +215,13 @@ impl Status {
         }
     }
 
+    pub fn active(&self) -> bool {
+        match self {
+            Status::Unstarted | Status::InProgress => true,
+            Status::Goal | Status::AllChecks | Status::Done => false,
+        }
+    }
+
     pub fn as_i64(&self) -> i64 {
         match self {
             Status::Unstarted => 0,
@@ -198,17 +240,5 @@ impl Status {
             Status::AllChecks => "All Checks",
             Status::Done => "Done",
         }
-    }
-}
-
-fn merge_last_activity(last_activity: &mut Option<u32>, next_last_activity: Option<u32>) {
-    if let Some(next_last_activity) = next_last_activity {
-        if let Some(last_activity) = last_activity {
-            if next_last_activity > *last_activity {
-                *last_activity = next_last_activity;
-            }
-        }
-    } else {
-        *last_activity = None;
     }
 }
