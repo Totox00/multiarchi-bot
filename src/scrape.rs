@@ -14,7 +14,7 @@ pub struct SlotData {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum LastActivity {
+pub enum LastActivity {
     Inactive,
     Unstarted,
     Activity(u32),
@@ -184,7 +184,7 @@ impl LastActivity {
         }
     }
 
-    fn to_option(self) -> Option<u32> {
+    pub fn to_option(self) -> Option<u32> {
         if let LastActivity::Activity(activity) = self {
             Some(activity)
         } else {

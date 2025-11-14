@@ -144,6 +144,7 @@ impl Command for TrackWorldCommand {
             let game_str = game_str(&data.games);
             let points = if awards_points { calc_points(&data.games) } else { 0 };
             let status_i64 = data.status.as_i64();
+            let last_activity_option = data.last_activity.to_option();
             let slot_id = if let Ok(response) = query!(
                 "INSERT INTO tracked_slots (world, name, games, status, checks, checks_total, last_activity, points, free) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 world_id,
@@ -152,7 +153,7 @@ impl Command for TrackWorldCommand {
                 status_i64,
                 data.checks,
                 data.checks_total,
-                data.last_activity,
+                last_activity_option,
                 points,
                 free
             )
