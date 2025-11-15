@@ -81,11 +81,12 @@ impl Bot {
             let status_i64 = data.status.as_i64();
             let last_activity_option = data.last_activity.to_option();
             if query!(
-                "UPDATE tracked_slots SET status = ?, checks = ?, last_activity = ? WHERE name = ?",
+                "UPDATE tracked_slots SET status = ?, checks = ?, last_activity = ? WHERE name = ? AND world = ?",
                 status_i64,
                 data.checks,
                 last_activity_option,
-                slot
+                slot,
+                id
             )
             .execute(&self.db)
             .await
