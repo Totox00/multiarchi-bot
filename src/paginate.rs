@@ -39,6 +39,7 @@ where
             if current_items.len() - current_start <= Self::PAGE_SIZE {
                 current_container = container_iter.next()?;
                 current_items = current_container.items();
+                current_start = 0;
             } else {
                 current_start += Self::PAGE_SIZE;
             }
