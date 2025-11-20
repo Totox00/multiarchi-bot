@@ -19,6 +19,7 @@ use crate::{
 enum Sort {
     Sent,
     Checks,
+    Alphabetical,
 }
 
 struct World {
@@ -67,7 +68,8 @@ impl Command for StatusReportCommand {
                 CreateCommandOption::new(CommandOptionType::String, "sort", "How to sort the slot")
                     .required(false)
                     .add_string_choice("Last check sent", "sent")
-                    .add_string_choice("Checks done", "checks"),
+                    .add_string_choice("Checks done", "checks")
+                    .add_string_choice("Alphabetical", "alphabetical"),
             )
     }
 
@@ -145,6 +147,7 @@ impl Sort {
         match value {
             "sent" => Some(Sort::Sent),
             "checks" => Some(Sort::Checks),
+            "alphabetical" => Some(Sort::Alphabetical),
             _ => None,
         }
     }
@@ -153,6 +156,7 @@ impl Sort {
         match self {
             Sort::Sent => 0,
             Sort::Checks => 1,
+            Sort::Alphabetical => 2,
         }
     }
 
@@ -160,6 +164,7 @@ impl Sort {
         match value {
             0 => Some(Sort::Sent),
             1 => Some(Sort::Checks),
+            2 => Some(Sort::Alphabetical),
             _ => None,
         }
     }
@@ -188,6 +193,10 @@ impl Paginate<World, SlotId, Slot, Extra> for StatusReportCommand {
             .fetch_all(&bot.db)
             .await
             .map(|response| response.into_iter().map(|record| (record.id, record.checks, record.checks_total)).collect::<Vec<_>>()),
+            Sort::Alphabetical => query!("SELECT id, checks, checks_total FROM tracked_slots WHERE status < 3 AND world = ? ORDER BY name ASC", world_id)
+                .fetch_all(&bot.db)
+                .await
+                .map(|response| response.into_iter().map(|record| (record.id, record.checks, record.checks_total)).collect::<Vec<_>>()),
         }) else {
             return vec![];
         };
