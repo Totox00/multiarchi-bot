@@ -348,11 +348,11 @@ impl StatusReportCommand {
                 .fetch_all(&bot.db)
                 .await
                 {
-                    let player_str = if let Ok(response) = query!("SELECT snowflake FROM claims INNER JOIN players ON claims.player = players.id WHERE slot = ?", slot_id)
+                    let player_str = if let Ok(response) = query!("SELECT snowflake, timestamp FROM claims INNER JOIN players ON claims.player = players.id WHERE slot = ?", slot_id)
                         .fetch_one(&bot.db)
                         .await
                     {
-                        format!("**Claimed by**: <@{}>", response.snowflake)
+                        format!("**Claimed by**: <@{}> on <t:{}:f>", response.snowflake, response.timestamp)
                     } else {
                         String::from("*Unclaimed*")
                     };

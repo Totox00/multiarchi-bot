@@ -46,7 +46,7 @@ use tokio::{spawn, time::interval};
 
 use crate::commands::interaction_create;
 
-const MAX_REALITIES: usize = 2;
+const MAX_REALITIES: usize = 3;
 const NO_REALITY_CLAIMS: i64 = 2;
 const UNSPENT_POINTS_LIMIT: i64 = 0;
 const LOG_PATH: &str = "bot.log";
