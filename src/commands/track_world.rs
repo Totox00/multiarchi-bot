@@ -30,7 +30,11 @@ impl Command for TrackWorldCommand {
                     .required(false)
                     .set_autocomplete(true),
             )
-            .add_option(CreateCommandOption::new(CommandOptionType::String, "import-claims", "If claims should be imported from a prior world").required(false))
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "import-claims", "If claims should be imported from a prior world")
+                    .required(false)
+                    .set_autocomplete(true),
+            )
             .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "awards-points", "If this world awards points for multiarchi. Defaults to true").required(false))
             .add_option(
                 CreateCommandOption::new(
@@ -222,6 +226,7 @@ impl Command for TrackWorldCommand {
         match interaction.data.autocomplete() {
             Some(AutocompleteOption { name: "name", value, .. }) => bot.autocomplete_preclaim_worlds(ctx, &interaction, value).await,
             Some(AutocompleteOption { name: "reality", value, .. }) => bot.autocomplete_realities(ctx, &interaction, value).await,
+            Some(AutocompleteOption { name: "import-claims", value, .. }) => bot.autocomplete_worlds(ctx, &interaction, value).await,
             Some(_) | None => {
                 interaction.no_autocomplete(&ctx).await;
             }
