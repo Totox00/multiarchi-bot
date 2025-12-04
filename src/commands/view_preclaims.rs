@@ -151,7 +151,8 @@ impl PageDetails for Slot {
             if self.notes.is_empty() {
                 format!("{}\nPoints: {}", self.games, self.points)
             } else {
-                format!("{}\n*{}*\nPoints: {}", self.games, self.notes, self.points)
+                let notes = if self.notes.len() > 200 { "View notes on sheet" } else { &self.notes };
+                format!("{}\n*{notes}*\nPoints: {}", self.games, self.points)
             },
             false,
         )
