@@ -45,6 +45,7 @@ impl Command for TrackWorldCommand {
                 .required(false),
             )
             .add_option(CreateCommandOption::new(CommandOptionType::String, "message", "Additional message to display").required(false))
+            .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "ping", "If @claims should be pinged. Defaults to true").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -62,6 +63,7 @@ impl Command for TrackWorldCommand {
         let mut awards_points = true;
         let mut use_claims = true;
         let mut message = None;
+        let mut ping = true;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
@@ -72,6 +74,7 @@ impl Command for TrackWorldCommand {
                 ("awards-points", ResolvedValue::Boolean(value)) => awards_points = value,
                 ("use-claims", ResolvedValue::Boolean(value)) => use_claims = value,
                 ("message", ResolvedValue::String(value)) => message = Some(value),
+                ("ping", ResolvedValue::Boolean(value)) => ping = value,
                 _ => (),
             }
         }
@@ -212,7 +215,8 @@ impl Command for TrackWorldCommand {
                     .send_message(
                         &ctx,
                         CreateMessage::new().content(format!(
-                            "[<@&1342191138056175707>] New world `{world_name}` available with {unclaimed_slots} unclaimed slots{}. Use `/claim` make your claims.{}",
+                            "{}New world `{world_name}` available with {unclaimed_slots} unclaimed slots{}. Use `/claim` make your claims.{}",
+                            if ping { "[<@&1342191138056175707>] " } else { "" },
                             if let Some(reality_name) = reality_name { format!(" in {reality_name}") } else { String::new() },
                             if let Some(message) = message { format!(" {message}") } else { String::new() }
                         )),
