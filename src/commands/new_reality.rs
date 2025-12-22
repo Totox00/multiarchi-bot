@@ -14,6 +14,7 @@ impl Command for NewRealityCommand {
             .kind(CommandType::ChatInput)
             .add_option(CreateCommandOption::new(CommandOptionType::String, "name", "Name of the new world").required(true))
             .add_option(CreateCommandOption::new(CommandOptionType::Integer, "max-claims", "Maximum claims within reality").required(true))
+            .add_option(CreateCommandOption::new(CommandOptionType::Boolean, "external", "If reality is excluded from maximum reality claims. Defaults to false").required(false))
     }
 
     async fn execute(bot: &Bot, ctx: Context, command: CommandInteraction) {
@@ -26,11 +27,13 @@ impl Command for NewRealityCommand {
 
         let mut name = "";
         let mut max_claims = 0;
+        let mut external = false;
 
         for ResolvedOption { name: option_name, value, .. } in command.data.options() {
             match (option_name, value) {
                 ("name", ResolvedValue::String(value)) => name = value,
                 ("max-claims", ResolvedValue::Integer(value)) => max_claims = value,
+                ("external", ResolvedValue::Boolean(value)) => external = value,
                 _ => (),
             }
         }
@@ -47,7 +50,11 @@ impl Command for NewRealityCommand {
 
         let _ = command.defer_ephemeral(&ctx.http).await;
 
-        if query!("INSERT INTO realities (name, max_claims) VALUES (?, ?)", name, max_claims).execute(&bot.db).await.is_ok() {
+        if query!("INSERT INTO realities (name, max_claims, external) VALUES (?, ?, ?)", name, max_claims, external)
+            .execute(&bot.db)
+            .await
+            .is_ok()
+        {
             let _ = command
                 .edit_response(
                     &ctx.http,

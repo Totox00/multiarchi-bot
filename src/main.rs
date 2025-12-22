@@ -71,6 +71,7 @@ struct Player {
 struct Reality {
     pub id: i64,
     pub max_claims: i64,
+    pub external: bool,
 }
 
 impl Bot {
@@ -107,7 +108,7 @@ impl Bot {
 
     async fn can_claim_slot(&self, player: i64, slot: i64) -> Result<(), &'static str> {
         if let Ok(response) = query!(
-            "SELECT realities.id, realities.max_claims FROM tracked_slots LEFT JOIN tracked_worlds ON tracked_worlds.id = tracked_slots.world LEFT JOIN realities ON realities.id = tracked_worlds.reality WHERE tracked_slots.id = ?",
+            "SELECT realities.id, realities.max_claims, external FROM tracked_slots LEFT JOIN tracked_worlds ON tracked_worlds.id = tracked_slots.world LEFT JOIN realities ON realities.id = tracked_worlds.reality WHERE tracked_slots.id = ?",
             slot
         )
         .fetch_optional(&self.db)
@@ -118,6 +119,7 @@ impl Bot {
                 response.map(|record| Reality {
                     id: record.id,
                     max_claims: record.max_claims.unwrap_or(NO_REALITY_CLAIMS),
+                    external: record.external.unwrap_or_default() > 0
                 }),
             )
             .await
@@ -128,7 +130,7 @@ impl Bot {
 
     async fn can_preclaim_slot(&self, player: i64, slot: i64) -> Result<(), &'static str> {
         if let Ok(response) = query!(
-            "SELECT realities.id, realities.max_claims FROM slots LEFT JOIN worlds ON worlds.id = slots.world LEFT JOIN realities ON realities.id = worlds.reality WHERE slots.id = ?",
+            "SELECT realities.id, realities.max_claims, external FROM slots LEFT JOIN worlds ON worlds.id = slots.world LEFT JOIN realities ON realities.id = worlds.reality WHERE slots.id = ?",
             slot
         )
         .fetch_optional(&self.db)
@@ -139,6 +141,7 @@ impl Bot {
                 response.map(|record| Reality {
                     id: record.id,
                     max_claims: record.max_claims.unwrap_or(NO_REALITY_CLAIMS),
+                    external: record.external.unwrap_or_default() > 0,
                 }),
             )
             .await
@@ -149,14 +152,16 @@ impl Bot {
 
     async fn can_claim_in_reality(&self, player: i64, reality: Option<Reality>) -> Result<(), &'static str> {
         let (max_claims, current_claims) = if let Some(reality) = reality {
-            let realities: Vec<_> = if let Ok(response) = query!("SELECT reality FROM current_realities WHERE player = ?", player).fetch_all(&self.db).await {
-                response.into_iter().filter_map(|record| record.reality).collect()
-            } else {
-                return Err("Failed to get current realities");
-            };
+            if !reality.external {
+                let realities: Vec<_> = if let Ok(response) = query!("SELECT realities FROM current_realities_claims WHERE player = ?", player).fetch_all(&self.db).await {
+                    response.into_iter().map(|record| record.realities).collect()
+                } else {
+                    return Err("Failed to get current realities");
+                };
 
-            if !realities.contains(&reality.id) && realities.len() >= MAX_REALITIES {
-                return Err("You cannot join more realities");
+                if !realities.contains(&reality.id) && realities.len() >= MAX_REALITIES {
+                    return Err("You cannot join more realities");
+                }
             }
 
             (
