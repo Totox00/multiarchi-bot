@@ -168,31 +168,29 @@ impl Command for FinishWorldCommand {
             }
         }
 
-        if let Some(chunk) = iter.into_remainder() {
-            let chunk: Vec<_> = chunk.collect();
-            if !chunk.is_empty() {
-                if let Err(err) = status_channel
-                    .send_message(
-                        &ctx,
-                        CreateMessage::new().embed(
-                            CreateEmbed::new().title(format!("{world} completed!")).description(
-                                chunk
-                                    .into_iter()
-                                    .map(|(slot, player)| format!("**{slot}** [{}]", if let Some(player) = player { format!("<@{player}>") } else { String::from("*Unclaimed*") }))
-                                    .collect::<Vec<_>>()
-                                    .join("\n"),
-                            ),
+        let chunk: Vec<_> = iter.into_remainder().collect();
+        if !chunk.is_empty() {
+            if let Err(err) = status_channel
+                .send_message(
+                    &ctx,
+                    CreateMessage::new().embed(
+                        CreateEmbed::new().title(format!("{world} completed!")).description(
+                            chunk
+                                .into_iter()
+                                .map(|(slot, player)| format!("**{slot}** [{}]", if let Some(player) = player { format!("<@{player}>") } else { String::from("*Unclaimed*") }))
+                                .collect::<Vec<_>>()
+                                .join("\n"),
                         ),
-                    )
-                    .await
-                {
-                    println!("Failed to post completion to status channel: {err}");
-                    let _ = transaction.rollback().await;
-                    let _ = command
-                        .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to post completion to status channel. Aborting"))
-                        .await;
-                    return;
-                }
+                    ),
+                )
+                .await
+            {
+                println!("Failed to post completion to status channel: {err}");
+                let _ = transaction.rollback().await;
+                let _ = command
+                    .edit_response(&ctx.http, EditInteractionResponse::new().content("Failed to post completion to status channel. Aborting"))
+                    .await;
+                return;
             }
         }
 

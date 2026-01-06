@@ -87,16 +87,19 @@ impl Command for WorldsCommand {
             }
         }
 
-        if let Some(chunk) = iter.into_remainder() {
-            if edited {
-                let _ = command
-                    .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().ephemeral(true).add_embed(create_embed(&chunk.collect::<Vec<_>>())))
-                    .await;
-            } else {
-                let _ = command
-                    .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(create_embed(&chunk.collect::<Vec<_>>())))
-                    .await;
-            }
+        if edited {
+            let _ = command
+                .create_followup(
+                    &ctx.http,
+                    CreateInteractionResponseFollowup::new()
+                        .ephemeral(true)
+                        .add_embed(create_embed(&iter.into_remainder().collect::<Vec<_>>())),
+                )
+                .await;
+        } else {
+            let _ = command
+                .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(create_embed(&iter.into_remainder().collect::<Vec<_>>())))
+                .await;
         }
     }
 }
